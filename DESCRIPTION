@@ -1,4 +1,4 @@
-Package: DirichletForestParallel
+Package: DirichletRF
 Type: Package
 Title: Dirichlet Regression Forest with Parallel Processing
 Version: 0.1.0
