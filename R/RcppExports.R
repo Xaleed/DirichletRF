@@ -2,34 +2,34 @@
 # Generator token: 10BE3573-1514-4C36-9D1C-5A225CD40393
 
 estimate_dirichlet_mom <- function(Y) {
-    .Call(`_DirichletForestParallel_estimate_dirichlet_mom`, Y)
+    .Call(`_DirichletRF_estimate_dirichlet_mom`, Y)
 }
 
 estimate_dirichlet_mle <- function(Y, max_iter = 10000L, tol = 1e-6, lambda = 1e-6) {
-    .Call(`_DirichletForestParallel_estimate_dirichlet_mle`, Y, max_iter, tol, lambda)
+    .Call(`_DirichletRF_estimate_dirichlet_mle`, Y, max_iter, tol, lambda)
 }
 
 DirichletForest <- function(X, Y, B = 100L, d_max = 10L, n_min = 5L, m_try = -1L, seed = 123L, method = "mom", store_samples = FALSE) {
-    .Call(`_DirichletForestParallel_DirichletForest`, X, Y, B, d_max, n_min, m_try, seed, method, store_samples)
+    .Call(`_DirichletRF_DirichletForest`, X, Y, B, d_max, n_min, m_try, seed, method, store_samples)
 }
 
 PredictDirichletForestWeightBased <- function(forest_model, X_new, method = "mom") {
-    .Call(`_DirichletForestParallel_PredictDirichletForestWeightBased`, forest_model, X_new, method)
+    .Call(`_DirichletRF_PredictDirichletForestWeightBased`, forest_model, X_new, method)
 }
 
 GetLeafPredictions <- function(forest_model, X_new) {
-    .Call(`_DirichletForestParallel_GetLeafPredictions`, forest_model, X_new)
+    .Call(`_DirichletRF_GetLeafPredictions`, forest_model, X_new)
 }
 
 PredictDirichletForest <- function(forest_model, X_new, method = "mom", use_leaf_predictions = TRUE) {
-    .Call(`_DirichletForestParallel_PredictDirichletForest`, forest_model, X_new, method, use_leaf_predictions)
+    .Call(`_DirichletRF_PredictDirichletForest`, forest_model, X_new, method, use_leaf_predictions)
 }
 
 GetSampleWeights <- function(forest_model, test_sample) {
-    .Call(`_DirichletForestParallel_GetSampleWeights`, forest_model, test_sample)
+    .Call(`_DirichletRF_GetSampleWeights`, forest_model, test_sample)
 }
 
 delete_dirichlet_forest_rcpp <- function(forest_model) {
-    invisible(.Call(`_DirichletForestParallel_delete_dirichlet_forest_rcpp`, forest_model))
+    invisible(.Call(`_DirichletRF_delete_dirichlet_forest_rcpp`, forest_model))
 }
 

@@ -22,7 +22,7 @@ devtools::install_github("Xaleed/DirichletRF")
 Download and install the latest binary release:
 ```r
 # Replace v0.1.0 with the latest release version
-install.packages("https://github.com/Xaleed/DirichletForestParallel/releases/download/v0.1.0/DirichletForestParallel_0.1.0.zip", 
+install.packages("https://github.com/Xaleed/DirichletForestParallel/releases/download/v0.1.0/DirichletRF_0.1.0.zip", 
                  repos = NULL, type = "win.binary")
 ```
 

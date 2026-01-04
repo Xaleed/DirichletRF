@@ -12,7 +12,7 @@ Rcpp::Rostream<false>& Rcpp::Rcerr = Rcpp::Rcpp_cerr_get();
 
 // estimate_dirichlet_mom
 NumericVector estimate_dirichlet_mom(const NumericMatrix& Y);
-RcppExport SEXP _DirichletForestParallel_estimate_dirichlet_mom(SEXP YSEXP) {
+RcppExport SEXP _DirichletRF_estimate_dirichlet_mom(SEXP YSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -23,7 +23,7 @@ END_RCPP
 }
 // estimate_dirichlet_mle
 NumericVector estimate_dirichlet_mle(const NumericMatrix& Y, int max_iter, double tol, double lambda);
-RcppExport SEXP _DirichletForestParallel_estimate_dirichlet_mle(SEXP YSEXP, SEXP max_iterSEXP, SEXP tolSEXP, SEXP lambdaSEXP) {
+RcppExport SEXP _DirichletRF_estimate_dirichlet_mle(SEXP YSEXP, SEXP max_iterSEXP, SEXP tolSEXP, SEXP lambdaSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -37,7 +37,7 @@ END_RCPP
 }
 // DirichletForest
 List DirichletForest(NumericMatrix X, NumericMatrix Y, int B, int d_max, int n_min, int m_try, int seed, std::string method, bool store_samples);
-RcppExport SEXP _DirichletForestParallel_DirichletForest(SEXP XSEXP, SEXP YSEXP, SEXP BSEXP, SEXP d_maxSEXP, SEXP n_minSEXP, SEXP m_trySEXP, SEXP seedSEXP, SEXP methodSEXP, SEXP store_samplesSEXP) {
+RcppExport SEXP _DirichletRF_DirichletForest(SEXP XSEXP, SEXP YSEXP, SEXP BSEXP, SEXP d_maxSEXP, SEXP n_minSEXP, SEXP m_trySEXP, SEXP seedSEXP, SEXP methodSEXP, SEXP store_samplesSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -56,7 +56,7 @@ END_RCPP
 }
 // PredictDirichletForestWeightBased
 List PredictDirichletForestWeightBased(List forest_model, NumericMatrix X_new, std::string method);
-RcppExport SEXP _DirichletForestParallel_PredictDirichletForestWeightBased(SEXP forest_modelSEXP, SEXP X_newSEXP, SEXP methodSEXP) {
+RcppExport SEXP _DirichletRF_PredictDirichletForestWeightBased(SEXP forest_modelSEXP, SEXP X_newSEXP, SEXP methodSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -69,7 +69,7 @@ END_RCPP
 }
 // GetLeafPredictions
 List GetLeafPredictions(List forest_model, NumericMatrix X_new);
-RcppExport SEXP _DirichletForestParallel_GetLeafPredictions(SEXP forest_modelSEXP, SEXP X_newSEXP) {
+RcppExport SEXP _DirichletRF_GetLeafPredictions(SEXP forest_modelSEXP, SEXP X_newSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -81,7 +81,7 @@ END_RCPP
 }
 // PredictDirichletForest
 List PredictDirichletForest(List forest_model, NumericMatrix X_new, std::string method, bool use_leaf_predictions);
-RcppExport SEXP _DirichletForestParallel_PredictDirichletForest(SEXP forest_modelSEXP, SEXP X_newSEXP, SEXP methodSEXP, SEXP use_leaf_predictionsSEXP) {
+RcppExport SEXP _DirichletRF_PredictDirichletForest(SEXP forest_modelSEXP, SEXP X_newSEXP, SEXP methodSEXP, SEXP use_leaf_predictionsSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -95,7 +95,7 @@ END_RCPP
 }
 // GetSampleWeights
 List GetSampleWeights(List forest_model, NumericVector test_sample);
-RcppExport SEXP _DirichletForestParallel_GetSampleWeights(SEXP forest_modelSEXP, SEXP test_sampleSEXP) {
+RcppExport SEXP _DirichletRF_GetSampleWeights(SEXP forest_modelSEXP, SEXP test_sampleSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -107,7 +107,7 @@ END_RCPP
 }
 // delete_dirichlet_forest_rcpp
 void delete_dirichlet_forest_rcpp(List forest_model);
-RcppExport SEXP _DirichletForestParallel_delete_dirichlet_forest_rcpp(SEXP forest_modelSEXP) {
+RcppExport SEXP _DirichletRF_delete_dirichlet_forest_rcpp(SEXP forest_modelSEXP) {
 BEGIN_RCPP
     Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< List >::type forest_model(forest_modelSEXP);
@@ -117,18 +117,18 @@ END_RCPP
 }
 
 static const R_CallMethodDef CallEntries[] = {
-    {"_DirichletForestParallel_estimate_dirichlet_mom", (DL_FUNC) &_DirichletForestParallel_estimate_dirichlet_mom, 1},
-    {"_DirichletForestParallel_estimate_dirichlet_mle", (DL_FUNC) &_DirichletForestParallel_estimate_dirichlet_mle, 4},
-    {"_DirichletForestParallel_DirichletForest", (DL_FUNC) &_DirichletForestParallel_DirichletForest, 9},
-    {"_DirichletForestParallel_PredictDirichletForestWeightBased", (DL_FUNC) &_DirichletForestParallel_PredictDirichletForestWeightBased, 3},
-    {"_DirichletForestParallel_GetLeafPredictions", (DL_FUNC) &_DirichletForestParallel_GetLeafPredictions, 2},
-    {"_DirichletForestParallel_PredictDirichletForest", (DL_FUNC) &_DirichletForestParallel_PredictDirichletForest, 4},
-    {"_DirichletForestParallel_GetSampleWeights", (DL_FUNC) &_DirichletForestParallel_GetSampleWeights, 2},
-    {"_DirichletForestParallel_delete_dirichlet_forest_rcpp", (DL_FUNC) &_DirichletForestParallel_delete_dirichlet_forest_rcpp, 1},
+    {"_DirichletRF_estimate_dirichlet_mom", (DL_FUNC) &_DirichletRF_estimate_dirichlet_mom, 1},
+    {"_DirichletRF_estimate_dirichlet_mle", (DL_FUNC) &_DirichletRF_estimate_dirichlet_mle, 4},
+    {"_DirichletRF_DirichletForest", (DL_FUNC) &_DirichletRF_DirichletForest, 9},
+    {"_DirichletRF_PredictDirichletForestWeightBased", (DL_FUNC) &_DirichletRF_PredictDirichletForestWeightBased, 3},
+    {"_DirichletRF_GetLeafPredictions", (DL_FUNC) &_DirichletRF_GetLeafPredictions, 2},
+    {"_DirichletRF_PredictDirichletForest", (DL_FUNC) &_DirichletRF_PredictDirichletForest, 4},
+    {"_DirichletRF_GetSampleWeights", (DL_FUNC) &_DirichletRF_GetSampleWeights, 2},
+    {"_DirichletRF_delete_dirichlet_forest_rcpp", (DL_FUNC) &_DirichletRF_delete_dirichlet_forest_rcpp, 1},
     {NULL, NULL, 0}
 };
 
-RcppExport void R_init_DirichletForestParallel(DllInfo *dll) {
+RcppExport void R_init_DirichletRF(DllInfo *dll) {
     R_registerRoutines(dll, NULL, CallEntries, NULL, NULL);
     R_useDynamicSymbols(dll, FALSE);
 }
