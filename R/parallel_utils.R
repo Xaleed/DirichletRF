@@ -1,5 +1,5 @@
 # Setup cluster workers for installed package
-setup_cluster_workers_installed <- function(cl, pkg_name = "DirichletForestParallel") {
+setup_cluster_workers_installed <- function(cl, pkg_name = "DirichletRF") {
   
   # Load Rcpp on workers
   parallel::clusterEvalQ(cl, library(Rcpp))
