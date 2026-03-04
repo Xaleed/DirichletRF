@@ -37,7 +37,7 @@ The predictions can be verified using matrix multiplication:
 \examples{
 \donttest{
 # Setup
-library(DirichletForestParallel)
+library(DirichletRF)
 n <- 100
 p <- 4
 X <- matrix(rnorm(n * p), n, p)

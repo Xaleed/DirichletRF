@@ -2,9 +2,9 @@
 library(Rcpp)
 library(microbenchmark)
 
-#remove.packages("DirichletForestParallel")
+#remove.packages("DirichletRF")
 
-setwd("C:/Users/29827094/Documents/GitHub/DirichletForestParallel/")
+setwd("C:/Users/29827094/Documents/GitHub/DirichletRF/")
 
 devtools::document()
 devtools::check()

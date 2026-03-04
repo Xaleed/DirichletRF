@@ -38,15 +38,16 @@ If -1, uses sqrt(p) (default: -1)}
 \item{method}{Character, parameter estimation method: "mle" or "mom" (default: "mom")}
 
 \item{store_samples}{Logical, if TRUE stores sample indices for weight-based predictions,
-if FALSE pre-computes predictions for faster inference (default: FALSE)}
+if FALSE pre-computes predictions (default: FALSE)}
 
 \item{n_cores}{Integer, number of cores to use. If -1, uses all available cores minus 1.
 If 1, uses sequential processing (default: -1)}
 
-\item{use_leaf_predictions}{Logical, if TRUE uses pre-computed leaf predictions
-for fitted values even when store_samples = TRUE. If FALSE (default),
-uses weight-based predictions when store_samples = TRUE. This affects
-the fitted values and residuals returned by the function (default: FALSE)}
+\item{use_leaf_predictions}{Logical, If TRUE, uses pre-computed leaf predictions
+for fitted values even when store_samples = TRUE. If FALSE,
+gathers all related training samples across all trees and estimates parameters
+from this pooled set.
+This affects the fitted values and residuals returned by the function (default: TRUE)}
 }
 \value{
 A list containing the distributed forest model with fitted values and residuals
@@ -58,7 +59,7 @@ Supports both fork-based (Unix/Mac) and cluster-based (Windows) parallelization.
 \examples{
 \donttest{
 # Generate sample data
-library(DirichletForestParallel)
+library(DirichletRF)
 n <- 500
 p <- 4
 X <- matrix(rnorm(n * p), n, p)
@@ -75,19 +76,13 @@ Y <- MCMCpack::rdirichlet(n, alpha)
 # ========================================
 
 # Example 1: Basic distributed forest with parallel processing
-df_par <- DirichletForest_distributed(X, Y, B = 50, n_cores = 3)
-
-# Example 2: Fast mode (pre-computed predictions, no sample storage)
-df_fast <- DirichletForest_distributed(X, Y, B = 100, store_samples = FALSE)
+df_par <- DirichletForest_distributed(X, Y, B = 100, n_cores = 3)
 
 # Example 3: Weight-based mode (stores samples for distributional analysis)
 df_weights <- DirichletForest_distributed(X, Y, B = 100, store_samples = TRUE)
 
 # Example 4: Using MLE instead of method of moments
 df_mle <- DirichletForest_distributed(X, Y, B = 50, method = "mle")
-
-# Example 5: Sequential processing (no parallelization)
-df_seq <- DirichletForest_distributed(X, Y, B = 50, n_cores = 1)
 
 # ========================================
 # ACCESSING FITTED VALUES AND RESIDUALS
@@ -98,19 +93,9 @@ alpha_hat <- df_par$fitted$alpha_hat        # Estimated Dirichlet parameters
 mean_fit <- df_par$fitted$mean_based        # Predictions from sample means
 param_fit <- df_par$fitted$param_based      # Predictions from normalized parameters
 
-# Compare predictions
-print("Mean-based vs Parameter-based predictions:")
-print(head(cbind(mean_fit, param_fit)))
-
 # Corresponding residuals
 resid_mean <- df_par$residuals$mean_based
 resid_param <- df_par$residuals$param_based
-
-# Compare residual performance
-rmse_mean <- sqrt(mean(resid_mean^2))
-rmse_param <- sqrt(mean(resid_param^2))
-print(paste("RMSE (mean-based):", round(rmse_mean, 4)))
-print(paste("RMSE (param-based):", round(rmse_param, 4)))
 
 # ========================================
 # MAKING PREDICTIONS
@@ -139,32 +124,19 @@ single_pred <- predict_distributed_forest(df_par, X_test[1, , drop = FALSE])
 
 # Get weights for a single test sample (requires store_samples = TRUE)
 test_point <- X_test[1, ]
-weights <- get_sample_weights_distributed(df_weights, test_point)
+weights <- get_weight_matrix_distributed(df_weights, test_point)
 
 # Examine results
-print(weights$sample_indices)  # Which training samples influenced prediction
-print(weights$weights)         # How much weight each sample received
+print(weights$weight_matrix)         # How much weight each sample received
 print(weights$Y_values)        # Compositional values of weighted samples
 
-# Find most influential training samples
-top_5 <- order(weights$weights, decreasing = TRUE)[1:5]
-print("Top 5 most influential training samples:")
-print(weights$sample_indices[top_5])
-print("Their weights:")
-print(weights$weights[top_5])
-
 # Verify weights sum to 1
-print(sum(weights$weights))  # Should be 1.0
+print(sum(weights$weight_matrix))  # Should be 1.0
 
 # Compare with actual prediction
 pred_single <- predict_distributed_forest(df_weights, matrix(test_point, nrow = 1))
 print("Predicted composition:")
 print(pred_single$mean_predictions)
-
-# Manual weighted prediction (should match pred_single$mean_predictions)
-manual_pred <- colSums(weights$weights * weights$Y_values)
-print("Manual weighted average:")
-print(manual_pred)
 
 # ========================================
 # CLEANUP
@@ -172,10 +144,9 @@ print(manual_pred)
 
 # Always clean up at the end, especially important on Windows
 cleanup_distributed_forest(df_par)
-cleanup_distributed_forest(df_fast)
+cleanup_distributed_forest(df)
 cleanup_distributed_forest(df_weights)
 cleanup_distributed_forest(df_mle)
-cleanup_distributed_forest(df_seq)
 }
 
 }

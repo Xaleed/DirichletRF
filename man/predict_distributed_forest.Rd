@@ -46,14 +46,14 @@ X_test <- matrix(rnorm(10 * p), 10, p)
 # Option 1: Weight-based predictions (default when store_samples = TRUE)
 pred_weights <- predict_distributed_forest(df, X_test)
 
-# Option 2: Fast leaf predictions (uses pre-computed values)
-pred_fast <- predict_distributed_forest(df, X_test, use_leaf_predictions = TRUE)
+# Option 2: uses pre-computed values
+pred <- predict_distributed_forest(df, X_test, use_leaf_predictions = TRUE)
 
 # Compare the two approaches
 print("Weight-based mean predictions:")
 print(head(pred_weights$mean_predictions))
-print("Fast leaf mean predictions:")
-print(head(pred_fast$mean_predictions))
+print("leaf mean predictions:")
+print(head(pred$mean_predictions))
 
 # Clean up
 cleanup_distributed_forest(df)
