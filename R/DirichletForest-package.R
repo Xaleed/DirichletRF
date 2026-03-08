@@ -5,7 +5,6 @@
 #'
 #' 
 #' @name DirichletRF-package
-#' @aliases DirichletRF
 #' @useDynLib DirichletRF, .registration = TRUE
 #' @importFrom Rcpp sourceCpp
 NULL

@@ -1,4 +1,5 @@
-setwd("C:/Users/29827094/Documents/GitHub/DirichletForestParallel")
+#setwd("C:/Users/29827094/Documents/GitHub/DirichletForestParallel")
+setwd("C:\\Users\\Khaled\\Documents\\GitHub\\DirichletRF")
 # Load devtools
 library(devtools)
 

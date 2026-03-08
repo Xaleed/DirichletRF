@@ -2,7 +2,6 @@
 % Please edit documentation in R/DirichletForest-package.R
 \name{DirichletRF-package}
 \alias{DirichletRF-package}
-\alias{DirichletRF}
 \title{DirichletRF: Dirichlet Random Forest for Compositional Data}
 \description{
 This package implements Dirichlet Random Forest for modeling and predicting

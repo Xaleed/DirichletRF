@@ -2,16 +2,16 @@
 % Please edit documentation in R/dirichlet_forest.R
 \name{print.dirichlet_forest}
 \alias{print.dirichlet_forest}
-\title{Custom Print Method for dirichlet_forest objects}
+\title{Custom Print Method for dirichlet_forest Objects}
 \usage{
 \method{print}{dirichlet_forest}(x, ...)
 }
 \arguments{
-\item{x}{A dirichlet_forest object}
+\item{x}{A \code{dirichlet_forest} object.}
 
-\item{...}{Further arguments passed to or from other methods}
+\item{...}{Further arguments passed to or from other methods.}
 }
 \description{
 Suppresses the display of large data matrices (Y_train, fitted, residuals)
-when the object is printed, while keeping them accessible via $.
+when the object is printed, while keeping them accessible via \code{$}.
 }
