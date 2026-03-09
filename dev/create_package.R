@@ -1,4 +1,6 @@
-setwd("C:\\Users\\Khaled\\Documents\\GitHub\\DirichletRF")  # Set working directory to package root
+#setwd("C:\\Users\\Khaled\\Documents\\GitHub\\DirichletRF")  # Set working directory to package root
+setwd("C:\\Users\\29827094\\Documents\\GitHub\\DirichletRF")  # Set working directory to package root
+
 getwd()  # Verify path
 library(Rcpp)
 
@@ -49,7 +51,7 @@ Y <- G / rowSums(G)
 
 # Example 1: Basic Dirichlet forest (sequential for CRAN compliance)
 forest1 <- DirichletRF(X, Y, num.trees = 100, num.cores = 3)
-
+forest1$
 # Example 2: Using maximum likelihood instead of method of moments
 #forest2 <- DirichletRF(X, Y, num.trees = 50, est.method = "mle")
 

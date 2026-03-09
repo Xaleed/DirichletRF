@@ -33,7 +33,7 @@ Default is 5. Note that nodes with sizes smaller than \code{min.node.size}
 can occur.}
 
 \item{mtry}{Number of covariates randomly selected as candidates at each
-split. Default is \code{sqrt(p)}.}
+split. Default is \code{sqrt(p)}, indicated by \code{-1}.}
 
 \item{seed}{The seed of the C++ random number generator.}
 
@@ -48,12 +48,11 @@ Therefore, the forest can be built over multiple cores. The default is
 specify \code{1} which means that the forest will be built sequentially.}
 }
 \value{
-A list of the forest which contains the following:
+A \code{dirichlet_forest} object containing the following
+user-accessible components:
 \describe{
 \item{\code{type}}{Parallelisation type used: \code{"sequential"},
 \code{"fork"}, or \code{"cluster"}.}
-\item{\code{cluster}}{The active PSOCK cluster object (Windows only;
-\code{NULL} otherwise). Must be released with \code{cleanupForest()}.}
 \item{\code{num.cores}}{Number of cores used.}
 \item{\code{trees.per.worker}}{Number of trees assigned to each worker.}
 \item{\code{num.trees}}{Total number of trees in the forest.}
@@ -79,24 +78,22 @@ normalising \code{alpha_hat} (n x k matrix).}
 Build a Dirichlet regression forest for compositional responses. In
 compositional data analysis (CoDA), parts reside in the simplex, and this
 regression forest ensures model output abide by CoDA principles. The
-implementation can be done using parallel processing and supports both
-fork-based (Unix/Mac) and cluster-based (Windows) parallelization.
+implementation can be done using parallel processing. Note that
+out-of-bag (OOB) error is not available in the current version; each tree
+is built on the entire training sample with no sample fraction used.
 }
 \details{
 The forest provides two types of fitted values: mean-based predictions
 (derived from sample means at each leaf) and parameter-based predictions
-(derived from normalised Dirichlet alpha parameters). Note that
-out-of-bag (OOB) error is not yet available; each tree is built on the
-entire training sample (no sample fraction is used).
+(derived from normalised Dirichlet alpha parameters).
 }
 \examples{
 \donttest{
 library(DirichletRF)
-n <- 500
-p <- 4
+n <- 300; p <- 4
 X <- matrix(rnorm(n * p), n, p)
 
-# Generate Dirichlet responses using base R
+# Generate Dirichlet with three parts from independent Gamma random variables
 alpha <- c(2, 3, 4)
 G <- matrix(rgamma(n * length(alpha), shape = rep(alpha, each = n)), n, length(alpha))
 Y <- G / rowSums(G)
@@ -105,11 +102,12 @@ Y <- G / rowSums(G)
 # FITTING MODELS
 # ========================================
 
-# Example 1: Basic Dirichlet forest (sequential for CRAN compliance)
+# Fit models in two examples. 1) Using "mom", and 2) using "mle"
+# Example 1 - Using method of moments
 forest1 <- DirichletRF(X, Y, num.trees = 100, num.cores = 1)
 
-# Example 2: Using maximum likelihood instead of method of moments
-#forest2 <- DirichletRF(X, Y, num.trees = 50, est.method = "mle")
+# Example 2 - Using maximum likelihood
+forest2 <- DirichletRF(X, Y, num.trees = 50, est.method = "mle", num.cores = 1)
 
 # ========================================
 # ACCESSING FITTED VALUES AND RESIDUALS
@@ -142,8 +140,6 @@ print(pred$alpha_predictions)  # Estimated Dirichlet parameters
 param_pred <- pred$alpha_predictions / rowSums(pred$alpha_predictions)
 print(param_pred)
 
-# Predict on a single observation
-single_pred <- predict(forest1, Xtest[1, , drop = FALSE])
 
 # ========================================
 # CLEANUP
@@ -151,9 +147,15 @@ single_pred <- predict(forest1, Xtest[1, , drop = FALSE])
 
 # Always clean up at the end, especially important on Windows
 cleanupForest(forest1)
-#cleanupForest(forest2)
+cleanupForest(forest2)
 }
 
+}
+\references{
+Masoumifard, K., van der Westhuizen, S., & Gardner-Lubbe, S. (In press).
+Dirichlet-random forest for predicting compositional data. In A. Bekker,
+J. Ferreira, & P. Nagar (Eds.), \emph{Environmental Statistics: Innovative
+Methods and Applications}. CRC Press.
 }
 \seealso{
 \code{\link{predict.dirichlet_forest}} for making predictions on new data.

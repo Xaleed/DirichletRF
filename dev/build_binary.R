@@ -8,4 +8,8 @@ pkg_file <- devtools::build(binary = TRUE)
 print(pkg_file)
 
 
+install.packages("https://github.com/Xaleed/DirichletRF/releases/download/v0.1.0/DirichletRF_0.1.0.zip", 
+                 repos = NULL, type = "win.binary")
+
+
 

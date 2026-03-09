@@ -4,15 +4,12 @@
 \alias{predict.dirichlet_forest}
 \title{Predict with a Dirichlet Forest}
 \usage{
-\method{predict}{dirichlet_forest}(object, newdata, est.method = "mom", ...)
+\method{predict}{dirichlet_forest}(object, newdata, ...)
 }
 \arguments{
 \item{object}{A \code{dirichlet_forest} object.}
 
 \item{newdata}{A numeric matrix of new covariates (n_new x p).}
-
-\item{est.method}{Parameter estimation method: \code{"mle"} or \code{"mom"}.
-Default is \code{"mom"}.}
 
 \item{...}{Currently unused.}
 }
@@ -31,8 +28,7 @@ by \code{\link{DirichletRF}}.
 }
 \examples{
 \donttest{
-n <- 500
-p <- 4
+n <- 300; p <- 4
 X <- matrix(rnorm(n * p), n, p)
 alpha <- c(2, 3, 4)
 G <- matrix(rgamma(n * length(alpha), shape = rep(alpha, each = n)), n, length(alpha))
@@ -49,8 +45,6 @@ print(pred$alpha_predictions)
 # Parameter-based predictions (normalised alphas)
 param_pred <- pred$alpha_predictions / rowSums(pred$alpha_predictions)
 
-# Single observation
-single_pred <- predict(forest, Xtest[1, , drop = FALSE])
 
 cleanupForest(forest)
 }

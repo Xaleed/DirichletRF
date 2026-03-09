@@ -21,7 +21,7 @@ X <- matrix(rnorm(100 * 4), 100, 4)
 G <- matrix(rgamma(100 * 3, shape = rep(c(2, 3, 4), each = 100)), 100, 3)
 Y <- G / rowSums(G)
 
-forest <- DirichletRF(X, Y, num.trees = 50, num.cores = 2)
+forest <- DirichletRF(X, Y, num.trees = 50, num.cores = 1)
 
 pred <- predict(forest, X)
 
