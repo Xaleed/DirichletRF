@@ -1,15 +1,14 @@
 #' Build a Dirichlet Regression Forest for Compositional Responses
-#'
+#' 
 #' Build a Dirichlet regression forest for compositional responses. In
 #' compositional data analysis (CoDA), parts reside in the simplex, and this
 #' regression forest ensures model output abide by CoDA principles. The
-#' implementation can be done using parallel processing. Note that
-#' out-of-bag (OOB) error is not available in the current version; each tree
-#' is built on the entire training sample with no sample fraction used.
+#' implementation can be done using parallel processing. Note that this
+#' implementation does not support out-of-bag (OOB) error estimation.
 #'
 #' The forest provides two types of fitted values: mean-based predictions
 #' (derived from sample means at each leaf) and parameter-based predictions
-#' (derived from normalised Dirichlet alpha parameters).
+#' (derived from normalised Dirichlet alpha parameters). 
 #'
 #' @param X A numeric (n x p) matrix of covariates. Note that the current
 #'   version only allows numeric covariates. Users may use one-hot encoding
@@ -33,8 +32,7 @@
 #'   \code{-1} which uses all the cores on the system minus 1. Users may also
 #'   specify \code{1} which means that the forest will be built sequentially.
 #'
-#' @return A \code{dirichlet_forest} object containing the following
-#'   user-accessible components:
+#' @return A list of the forest which contains the following:
 #' \describe{
 #'   \item{\code{type}}{Parallelisation type used: \code{"sequential"},
 #'     \code{"fork"}, or \code{"cluster"}.}
@@ -59,19 +57,14 @@
 #'   }
 #' }
 #'
-#' @references
-#' Masoumifard, K., van der Westhuizen, S., & Gardner-Lubbe, S. (In press).
-#' Dirichlet-random forest for predicting compositional data. In A. Bekker,
-#' J. Ferreira, & P. Nagar (Eds.), \emph{Environmental Statistics: Innovative
-#' Methods and Applications}. CRC Press.
-#'
 #' @examples
 #' \donttest{
 #' library(DirichletRF)
-#' n <- 300; p <- 4
+#' n <- 500
+#' p <- 4
 #' X <- matrix(rnorm(n * p), n, p)
 #'
-#' # Generate Dirichlet with three parts from independent Gamma random variables
+#' # Generate Dirichlet responses using base R
 #' alpha <- c(2, 3, 4)
 #' G <- matrix(rgamma(n * length(alpha), shape = rep(alpha, each = n)), n, length(alpha))
 #' Y <- G / rowSums(G)
@@ -80,12 +73,11 @@
 #' # FITTING MODELS
 #' # ========================================
 #'
-#' # Fit models in two examples. 1) Using "mom", and 2) using "mle"
-#' # Example 1 - Using method of moments
+#' # Example 1: Basic Dirichlet forest (sequential for CRAN compliance)
 #' forest1 <- DirichletRF(X, Y, num.trees = 100, num.cores = 1)
 #'
-#' # Example 2 - Using maximum likelihood
-#' forest2 <- DirichletRF(X, Y, num.trees = 50, est.method = "mle", num.cores = 1)
+#' # Example 2: Using maximum likelihood instead of method of moments
+#' #forest2 <- DirichletRF(X, Y, num.trees = 50, est.method = "mle")
 #'
 #' # ========================================
 #' # ACCESSING FITTED VALUES AND RESIDUALS
@@ -118,6 +110,8 @@
 #' param_pred <- pred$alpha_predictions / rowSums(pred$alpha_predictions)
 #' print(param_pred)
 #'
+#' # Predict on a single observation
+#' single_pred <- predict(forest1, Xtest[1, , drop = FALSE])
 #'
 #' # ========================================
 #' # CLEANUP
@@ -125,8 +119,14 @@
 #'
 #' # Always clean up at the end, especially important on Windows
 #' cleanupForest(forest1)
-#' cleanupForest(forest2)
+#' #cleanupForest(forest2)
 #' }
+#'
+#' @references
+#' Masoumifard, K., van der Westhuizen, S., & Gardner-Lubbe, S. (In press).
+#' Dirichlet-random forest for predicting compositional data. In A. Bekker,
+#' J. Ferreira, & P. Nagar (Eds.), \emph{Environmental Statistics: Innovative
+#' Methods and Applications}. CRC Press.
 #'
 #' @seealso
 #' \code{\link{predict.dirichlet_forest}} for making predictions on new data.
@@ -166,7 +166,7 @@ DirichletRF <- function(X, Y, num.trees = 100, max.depth = 10, min.node.size = 5
                                   mtry, seed, est.method, store_samples)
     result <- list(
       type             = "sequential",
-      forest           = forest_seq,   # internal use only
+      forest           = forest_seq,
       num.cores        = 1,
       trees.per.worker = num.trees,
       num.trees        = num.trees,
@@ -175,7 +175,7 @@ DirichletRF <- function(X, Y, num.trees = 100, max.depth = 10, min.node.size = 5
     class(result) <- c("dirichlet_forest", "list")
 
     cat("Computing fitted values and residuals...\n")
-    fitted_preds <- predict(result, X, est.method = est.method)
+    fitted_preds <- predict(result, X)
     alpha_means  <- fitted_preds$alpha_predictions /
                     rowSums(fitted_preds$alpha_predictions)
 
@@ -203,7 +203,7 @@ DirichletRF <- function(X, Y, num.trees = 100, max.depth = 10, min.node.size = 5
                                   mtry, seed, est.method, store_samples)
     result <- list(
       type             = "sequential",
-      forest           = forest_seq,   # internal use only
+      forest           = forest_seq,
       num.cores        = 1,
       trees.per.worker = num.trees,
       num.trees        = num.trees,
@@ -212,7 +212,7 @@ DirichletRF <- function(X, Y, num.trees = 100, max.depth = 10, min.node.size = 5
     class(result) <- c("dirichlet_forest", "list")
 
     cat("Computing fitted values and residuals...\n")
-    fitted_preds <- predict(result, X, est.method = est.method)
+    fitted_preds <- predict(result, X)
     alpha_means  <- fitted_preds$alpha_predictions /
                     rowSums(fitted_preds$alpha_predictions)
 
@@ -254,7 +254,7 @@ DirichletRF <- function(X, Y, num.trees = 100, max.depth = 10, min.node.size = 5
 
     result <- list(
       type             = "fork",
-      worker_forests   = worker_forests,   # internal use only
+      worker_forests   = worker_forests,
       num.cores        = num.cores,
       trees.per.worker = trees_per_core,
       num.trees        = sum(trees_per_core),
@@ -263,7 +263,7 @@ DirichletRF <- function(X, Y, num.trees = 100, max.depth = 10, min.node.size = 5
     class(result) <- c("dirichlet_forest", "list")
 
     cat("Computing fitted values and residuals...\n")
-    fitted_preds <- predict(result, X, est.method = est.method)
+    fitted_preds <- predict(result, X)
     alpha_means  <- fitted_preds$alpha_predictions /
                     rowSums(fitted_preds$alpha_predictions)
 
@@ -316,7 +316,7 @@ DirichletRF <- function(X, Y, num.trees = 100, max.depth = 10, min.node.size = 5
 
     result <- list(
       type             = "cluster",
-      cluster          = cl,           # internal use only
+      cluster          = cl,
       num.cores        = num.cores,
       trees.per.worker = trees_per_core,
       num.trees        = sum(trees_per_core),
@@ -325,7 +325,7 @@ DirichletRF <- function(X, Y, num.trees = 100, max.depth = 10, min.node.size = 5
     class(result) <- c("dirichlet_forest", "list")
 
     cat("Computing fitted values and residuals...\n")
-    fitted_preds <- predict(result, X, est.method = est.method)
+    fitted_preds <- predict(result, X)
     alpha_means  <- fitted_preds$alpha_predictions /
                     rowSums(fitted_preds$alpha_predictions)
 
@@ -423,7 +423,7 @@ print.dirichlet_forest <- function(x, ...) {
 #' G <- matrix(rgamma(100 * 3, shape = rep(c(2, 3, 4), each = 100)), 100, 3)
 #' Y <- G / rowSums(G)
 #'
-#' forest <- DirichletRF(X, Y, num.trees = 50, num.cores = 1)
+#' forest <- DirichletRF(X, Y, num.trees = 50, num.cores = 2)
 #'
 #' pred <- predict(forest, X)
 #'
@@ -462,7 +462,8 @@ cleanupForest <- function(forest) {
 #'
 #' @examples
 #' \donttest{
-#' n <- 300; p <- 4
+#' n <- 500
+#' p <- 4
 #' X <- matrix(rnorm(n * p), n, p)
 #' alpha <- c(2, 3, 4)
 #' G <- matrix(rgamma(n * length(alpha), shape = rep(alpha, each = n)), n, length(alpha))
@@ -479,11 +480,14 @@ cleanupForest <- function(forest) {
 #' # Parameter-based predictions (normalised alphas)
 #' param_pred <- pred$alpha_predictions / rowSums(pred$alpha_predictions)
 #'
+#' # Single observation
+#' single_pred <- predict(forest, Xtest[1, , drop = FALSE])
 #'
 #' cleanupForest(forest)
 #' }
 #' @export
-predict.dirichlet_forest <- function(object, newdata,  ...) {
+predict.dirichlet_forest <- function(object, newdata, ...) {
+  est.method <- "mom"
 
   distributed_forest <- object
   X_new <- newdata
@@ -508,9 +512,8 @@ predict.dirichlet_forest <- function(object, newdata,  ...) {
   n_samples <- nrow(X_new)
 
   # Hardcoded for this version; will be exposed as arguments in a future release.
-  store_samples        <- FALSE
+  store_samples <- FALSE
   use_leaf_predictions <- TRUE
-  est.method = "mom" # This is also hardcoded for now, but will be an argument later for quantile random forest
 
   pred_mode <- if (!store_samples) " (pre-computed)" else " (pre-computed leaf values)"
   cat("Prediction mode:", pred_mode, "\n")
@@ -580,7 +583,7 @@ predict.dirichlet_forest <- function(object, newdata,  ...) {
   first_pred <- valid_predictions[[1]]
   n_classes  <- ncol(first_pred$alpha_predictions)
 
-  combined_alpha <- array(0, dim = c(n_samples, n_classes))
+  combined_alpha <- array(0, dim = c(n_samples, n_classes))      
   combined_mean  <- array(0, dim = c(n_samples, n_classes))
 
   total_trees <- sum(distributed_forest$trees.per.worker[seq_along(valid_predictions)])
