@@ -9,16 +9,16 @@ estimate_dirichlet_mle <- function(Y, max_iter = 10000L, tol = 1e-6, lambda = 1e
     .Call(`_DirichletRF_estimate_dirichlet_mle`, Y, max_iter, tol, lambda)
 }
 
-DirichletForest <- function(X, Y, B = 100L, d_max = 10L, n_min = 5L, m_try = -1L, seed = 123L, method = "mom", store_samples = FALSE) {
-    .Call(`_DirichletRF_DirichletForest`, X, Y, B, d_max, n_min, m_try, seed, method, store_samples)
-}
-
-PredictDirichletForestWeightBased <- function(forest_model, X_new, method = "mom") {
-    .Call(`_DirichletRF_PredictDirichletForestWeightBased`, forest_model, X_new, method)
+DirichletForest <- function(X, Y, B = 100L, d_max = 10L, n_min = 5L, m_try = -1L, seed = 123L, method = "mom", store_samples = FALSE, num_cores = 1L) {
+    .Call(`_DirichletRF_DirichletForest`, X, Y, B, d_max, n_min, m_try, seed, method, store_samples, num_cores)
 }
 
 GetLeafPredictions <- function(forest_model, X_new) {
     .Call(`_DirichletRF_GetLeafPredictions`, forest_model, X_new)
+}
+
+PredictDirichletForestWeightBased <- function(forest_model, X_new, method = "mom") {
+    .Call(`_DirichletRF_PredictDirichletForestWeightBased`, forest_model, X_new, method)
 }
 
 PredictDirichletForest <- function(forest_model, X_new, method = "mom", use_leaf_predictions = TRUE) {
@@ -27,9 +27,5 @@ PredictDirichletForest <- function(forest_model, X_new, method = "mom", use_leaf
 
 GetSampleWeights <- function(forest_model, test_sample) {
     .Call(`_DirichletRF_GetSampleWeights`, forest_model, test_sample)
-}
-
-delete_dirichlet_forest_rcpp <- function(forest_model) {
-    invisible(.Call(`_DirichletRF_delete_dirichlet_forest_rcpp`, forest_model))
 }
 

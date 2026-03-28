@@ -80,8 +80,6 @@ double log_likelihood_dirichlet(const std::vector<double>& Y_vec,
     return loglik;
 }
 
-
-
 // ============================================================================
 // METHOD OF MOMENTS — pure STL
 // ============================================================================
@@ -276,10 +274,11 @@ std::vector<double> estimate_mle(const std::vector<double>& Y_vec,
 }
 
 // ============================================================================
-// R EXPORT WRAPPERS (thin Rcpp wrappers around STL functions)
+// R EXPORT WRAPPERS — renamed with _v2 suffix
 // ============================================================================
+
 // [[Rcpp::export]]
-NumericVector estimate_dirichlet_mom(const NumericMatrix& Y) {
+NumericVector estimate_dirichlet_mom_v2(const NumericMatrix& Y) {
     int n = Y.nrow(), k = Y.ncol();
     std::vector<double> Y_vec(n * k);
     for (int i = 0; i < n; i++)
@@ -292,10 +291,10 @@ NumericVector estimate_dirichlet_mom(const NumericMatrix& Y) {
 }
 
 // [[Rcpp::export]]
-NumericVector estimate_dirichlet_mle(const NumericMatrix& Y,
-                                     int    max_iter = 10000,
-                                     double tol      = 1e-6,
-                                     double lambda   = 1e-6) {
+NumericVector estimate_dirichlet_mle_v2(const NumericMatrix& Y,
+                                        int    max_iter = 10000,
+                                        double tol      = 1e-6,
+                                        double lambda   = 1e-6) {
     int n = Y.nrow(), k = Y.ncol();
     std::vector<double> Y_vec(n * k);
     for (int i = 0; i < n; i++)
@@ -477,15 +476,6 @@ Node* GrowTree(const std::vector<double>& X_vec,
 // ============================================================================
 // TREE TRAVERSAL — pure STL
 // ============================================================================
-Node* FindLeafNode(Node* node, const std::vector<double>& x,
-                   int n_features, int row) {
-    if (node->is_leaf) return node;
-    return (x[row * n_features + node->feature_index] <= node->split_value)
-        ? FindLeafNode(node->left,  x, n_features, row)
-        : FindLeafNode(node->right, x, n_features, row);
-}
-
-// Fast single-sample traversal for prediction
 Node* FindLeafNode1D(Node* node, const std::vector<double>& x) {
     if (node->is_leaf) return node;
     return (x[node->feature_index] <= node->split_value)
@@ -494,14 +484,14 @@ Node* FindLeafNode1D(Node* node, const std::vector<double>& x) {
 }
 
 // ============================================================================
-// BUILD DIRICHLET FOREST — OpenMP parallel over pure STL
+// BUILD DIRICHLET FOREST — renamed to DirichletForest_v2
 // ============================================================================
 // [[Rcpp::export]]
-List DirichletForest(NumericMatrix X, NumericMatrix Y, int B = 100,
-                     int d_max = 10, int n_min = 5, int m_try = -1,
-                     int seed = 123, std::string method = "mom",
-                     bool store_samples = false,
-                     int num_cores = 1) {
+List DirichletForest_v2(NumericMatrix X, NumericMatrix Y, int B = 100,
+                        int d_max = 10, int n_min = 5, int m_try = -1,
+                        int seed = 123, std::string method = "mom",
+                        bool store_samples = false,
+                        int num_cores = 1) {
 
     int n_samples  = X.nrow();
     int n_features = X.ncol();
@@ -534,7 +524,7 @@ List DirichletForest(NumericMatrix X, NumericMatrix Y, int B = 100,
 
     std::vector<Node*> forest(B, nullptr);
 
-    // Parallel tree building — all code inside uses pure STL only
+    // Parallel tree building
     #ifdef _OPENMP
     #pragma omp parallel for schedule(dynamic)
     #endif
@@ -551,7 +541,7 @@ List DirichletForest(NumericMatrix X, NumericMatrix Y, int B = 100,
     // Wrap back into Rcpp AFTER parallel region
     List forest_ptrs(B);
     for (int i = 0; i < B; i++)
-        forest_ptrs[i] = XPtr<Node>(forest[i], true);
+        forest_ptrs[i] = XPtr<Node>(forest[i]);
 
     List result = List::create(
         Named("forest")        = forest_ptrs,
@@ -570,10 +560,10 @@ List DirichletForest(NumericMatrix X, NumericMatrix Y, int B = 100,
 }
 
 // ============================================================================
-// GET LEAF PREDICTIONS (fast path) — Rcpp only at entry/exit
+// GET LEAF PREDICTIONS — renamed to GetLeafPredictions_v2
 // ============================================================================
 // [[Rcpp::export]]
-List GetLeafPredictions(List forest_model, NumericMatrix X_new) {
+List GetLeafPredictions_v2(List forest_model, NumericMatrix X_new) {
     List forest_ptrs = forest_model["forest"];
     int  n_trees     = forest_model["n_trees"];
     int  n_classes   = forest_model["n_classes"];
@@ -590,7 +580,6 @@ List GetLeafPredictions(List forest_model, NumericMatrix X_new) {
     NumericMatrix mean_out(n_samples,  n_classes);
 
     for (int i = 0; i < n_samples; i++) {
-        // Build 1D sample vector for traversal
         std::vector<double> sample(n_features);
         for (int j = 0; j < n_features; j++)
             sample[j] = X_vec[i * n_features + j];
@@ -649,12 +638,12 @@ std::unordered_map<int, double> ComputeWeights(
 }
 
 // ============================================================================
-// WEIGHT-BASED PREDICTION (distributional path)
+// WEIGHT-BASED PREDICTION — renamed to PredictDirichletForestWeightBased_v2
 // ============================================================================
 // [[Rcpp::export]]
-List PredictDirichletForestWeightBased(List forest_model,
-                                       NumericMatrix X_new,
-                                       std::string method = "mom") {
+List PredictDirichletForestWeightBased_v2(List forest_model,
+                                          NumericMatrix X_new,
+                                          std::string method = "mom") {
     List          forest_ptrs = forest_model["forest"];
     int           n_trees     = forest_model["n_trees"];
     int           n_classes   = forest_model["n_classes"];
@@ -727,25 +716,25 @@ List PredictDirichletForestWeightBased(List forest_model,
 }
 
 // ============================================================================
-// UNIFIED PREDICTION
+// UNIFIED PREDICTION — renamed to PredictDirichletForest_v2
 // ============================================================================
 // [[Rcpp::export]]
-List PredictDirichletForest(List forest_model, NumericMatrix X_new,
-                            std::string method = "mom",
-                            bool use_leaf_predictions = true) {
+List PredictDirichletForest_v2(List forest_model, NumericMatrix X_new,
+                               std::string method = "mom",
+                               bool use_leaf_predictions = true) {
     bool store_samples = as<bool>(forest_model["store_samples"]);
 
     if (!store_samples || use_leaf_predictions)
-        return GetLeafPredictions(forest_model, X_new);
+        return GetLeafPredictions_v2(forest_model, X_new);
     else
-        return PredictDirichletForestWeightBased(forest_model, X_new, method);
+        return PredictDirichletForestWeightBased_v2(forest_model, X_new, method);
 }
 
 // ============================================================================
-// GET SAMPLE WEIGHTS (analysis utility)
+// GET SAMPLE WEIGHTS — renamed to GetSampleWeights_v2
 // ============================================================================
 // [[Rcpp::export]]
-List GetSampleWeights(List forest_model, NumericVector test_sample) {
+List GetSampleWeights_v2(List forest_model, NumericVector test_sample) {
     List          forest_ptrs = forest_model["forest"];
     int           n_trees     = forest_model["n_trees"];
     NumericMatrix Y_train_mat = forest_model["Y_train"];
@@ -781,5 +770,126 @@ List GetSampleWeights(List forest_model, NumericVector test_sample) {
     );
 }
 
+// ============================================================================
+// CLEANUP — renamed to delete_dirichlet_forest_rcpp_v2
+// ============================================================================
+// [[Rcpp::export]]
+void delete_dirichlet_forest_rcpp_v2(List forest_model) {
+    List forest_ptrs = forest_model["forest"];
+    int  n_trees     = forest_model["n_trees"];
+
+    for (int i = 0; i < n_trees; i++) {
+        XPtr<Node> tree_ptr(as<SEXP>(forest_ptrs[i]));
+        Node* raw = tree_ptr.get();
+        if (raw != nullptr) {
+            delete raw;
+            tree_ptr.release();
+        }
+    }
+}
+
+// ============================================================================
+// TEST WRAPPERS — for comparison with File 1
+// ============================================================================
+
+// [[Rcpp::export]]
+double test_loglik_v2(NumericMatrix Y, NumericVector alpha) {
+    int n = Y.nrow(), k = Y.ncol();
+    std::vector<double> Y_vec(n * k);
+    for (int i = 0; i < n; i++)
+        for (int j = 0; j < k; j++)
+            Y_vec[i * k + j] = Y(i, j);
+
+    std::vector<int> indices(n);
+    std::iota(indices.begin(), indices.end(), 0);
+
+    std::vector<double> alpha_vec(alpha.begin(), alpha.end());
+
+    return log_likelihood_dirichlet(Y_vec, indices, k, alpha_vec);
+}
+
+// [[Rcpp::export]]
+NumericVector test_mom_v2(NumericMatrix Y) {
+    int n = Y.nrow(), k = Y.ncol();
+    std::vector<double> Y_vec(n * k);
+    for (int i = 0; i < n; i++)
+        for (int j = 0; j < k; j++)
+            Y_vec[i * k + j] = Y(i, j);
+
+    std::vector<int> indices(n);
+    std::iota(indices.begin(), indices.end(), 0);
+
+    auto result = estimate_mom(Y_vec, indices, k);
+    return NumericVector(result.begin(), result.end());
+}
+
+// [[Rcpp::export]]
+NumericVector test_mle_v2(NumericMatrix Y,
+                           int    max_iter = 10000,
+                           double tol      = 1e-6,
+                           double lambda   = 1e-6) {
+    int n = Y.nrow(), k = Y.ncol();
+    std::vector<double> Y_vec(n * k);
+    for (int i = 0; i < n; i++)
+        for (int j = 0; j < k; j++)
+            Y_vec[i * k + j] = Y(i, j);
+
+    std::vector<int> indices(n);
+    std::iota(indices.begin(), indices.end(), 0);
+
+    auto result = estimate_mle(Y_vec, indices, k, max_iter, tol, lambda);
+    return NumericVector(result.begin(), result.end());
+}
+
+// [[Rcpp::export]]
+List test_best_split_v2(NumericMatrix X, NumericMatrix Y,
+                         IntegerVector sample_indices,
+                         IntegerVector feature_subset,
+                         int n_features_,
+                         int n_classes_,
+                         std::string method = "mom") {
+
+    int n = X.nrow();
+    int p = X.ncol();
+    int k = Y.ncol();
+
+    // Convert to STL
+    std::vector<double> X_vec(n * p);
+    std::vector<double> Y_vec(n * k);
+    for (int i = 0; i < n; i++) {
+        for (int j = 0; j < p; j++) X_vec[i * p + j] = X(i, j);
+        for (int j = 0; j < k; j++) Y_vec[i * k + j] = Y(i, j);
+    }
+
+    std::vector<int> idx(sample_indices.begin(),  sample_indices.end());
+    std::vector<int> feat(feature_subset.begin(), feature_subset.end());
+
+    SplitResult split = FindBestSplit(X_vec, Y_vec, idx, feat,
+                                      n_features_, n_classes_, method);
+
+    return List::create(
+        Named("gain")          = split.gain,
+        Named("feature")       = split.feature,
+        Named("split_value")   = split.split_value,
+        Named("left_indices")  = split.left_indices,
+        Named("right_indices") = split.right_indices
+    );
+}
 
 
+
+// [[Rcpp::export]]
+int check_openmp(int num_cores) {
+#ifdef _OPENMP
+omp_set_num_threads(num_cores);
+int actual = 0;
+#pragma omp parallel
+{
+    #pragma omp atomic
+    actual++;
+}
+return actual;
+#else
+return -1;
+#endif
+}

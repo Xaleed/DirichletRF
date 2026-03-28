@@ -3,7 +3,6 @@
 S3method(predict,dirichlet_forest)
 S3method(print,dirichlet_forest)
 export(DirichletRF)
-export(cleanupForest)
 importFrom(Rcpp,sourceCpp)
 importFrom(stats,predict)
 useDynLib(DirichletRF, .registration = TRUE)

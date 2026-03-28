@@ -16,8 +16,8 @@
 \value{
 A list with the following elements:
 \describe{
-\item{\code{alpha_predictions}}{Estimated Dirichlet alpha parameters for
-each new observation (n_new x k matrix).}
+\item{\code{alpha_predictions}}{Estimated Dirichlet alpha parameters
+for each new observation (n_new x k matrix).}
 \item{\code{mean_predictions}}{Mean-based compositional predictions
 (n_new x k matrix).}
 }
@@ -27,25 +27,28 @@ Makes predictions using a fitted \code{dirichlet_forest} object returned
 by \code{\link{DirichletRF}}.
 }
 \examples{
+# Small toy example (auto-tested)
+set.seed(42)
+n <- 50; p <- 2
+X <- matrix(rnorm(n * p), n, p)
+G <- matrix(rgamma(n * 3, shape = rep(c(2, 3, 4), each = n)), n, 3)
+Y <- G / rowSums(G)
+forest  <- DirichletRF(X, Y, num.trees = 5, num.cores = 1)
+Xtest   <- matrix(rnorm(5 * p), 5, p)
+pred    <- predict(forest, Xtest)
+pred$mean_predictions
+
 \donttest{
-n <- 300; p <- 4
+n <- 500; p <- 4
 X <- matrix(rnorm(n * p), n, p)
 alpha <- c(2, 3, 4)
-G <- matrix(rgamma(n * length(alpha), shape = rep(alpha, each = n)), n, length(alpha))
+G <- matrix(rgamma(n * length(alpha), shape = rep(alpha, each = n)),
+            n, length(alpha))
 Y <- G / rowSums(G)
-
 forest <- DirichletRF(X, Y, num.trees = 50, num.cores = 1)
-
-Xtest <- matrix(rnorm(10 * p), 10, p)
-
-pred <- predict(forest, Xtest)
-print(pred$mean_predictions)
-print(pred$alpha_predictions)
-
-# Parameter-based predictions (normalised alphas)
-param_pred <- pred$alpha_predictions / rowSums(pred$alpha_predictions)
-
-
-cleanupForest(forest)
+Xtest  <- matrix(rnorm(10 * p), 10, p)
+pred   <- predict(forest, Xtest)
+param_pred  <- pred$alpha_predictions / rowSums(pred$alpha_predictions)
+single_pred <- predict(forest, Xtest[1, , drop = FALSE])
 }
 }

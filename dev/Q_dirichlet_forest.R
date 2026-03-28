@@ -2,7 +2,7 @@
 
 #'
 
-#' Builds a Dirichlet regression forest using parallel processing when available.
+#' Builds a Dirichlet random forest using parallel processing when available.
 
 #' Supports both fork-based (Unix/Mac) and cluster-based (Windows) parallelization.
 

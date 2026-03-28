@@ -11,7 +11,13 @@
 
 \item{...}{Further arguments passed to or from other methods.}
 }
+\value{
+Invisibly returns \code{x}, the \code{dirichlet_forest} object
+unchanged. Called primarily for its side effect of printing a summary
+of the model to the console.
+}
 \description{
-Suppresses the display of large data matrices (Y_train, fitted, residuals)
-when the object is printed, while keeping them accessible via \code{$}.
+Suppresses the display of large data matrices (Y_train, fitted,
+residuals) when the object is printed, while keeping them accessible
+via \code{$}.
 }

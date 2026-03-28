@@ -63,7 +63,7 @@ setup_cluster_workers <- function(cl, cpp_file = NULL) {
     stop("C++ file not found: ", cpp_file)
   }
   
-  cat("Loading C++ functions from:", cpp_file, "\n")
+  message("Loading C++ functions from: ", cpp_file)
   
   # Source the C++ file on each worker
   parallel::clusterCall(cl, function(cpp_path) {
@@ -80,5 +80,5 @@ setup_cluster_workers <- function(cl, cpp_file = NULL) {
     }
   })
   
-  cat("Worker setup results:", unlist(result), "\n")
+  message("Worker setup results: ", paste(unlist(result), collapse = " "))
 }

@@ -2,7 +2,7 @@
 % Please edit documentation in R/dirichlet_forest.R
 \name{DirichletRF}
 \alias{DirichletRF}
-\title{Build a Dirichlet Regression Forest for Compositional Responses}
+\title{Build a Dirichlet Random Forest for Compositional Responses}
 \usage{
 DirichletRF(
   X,
@@ -29,32 +29,30 @@ should sum to 1. That is, data should already be normalised if needed.}
 \item{max.depth}{Maximum depth of trees. Default is 10.}
 
 \item{min.node.size}{Minimum size of observations in each tree leaf.
-Default is 5. Note that nodes with sizes smaller than \code{min.node.size}
-can occur.}
+Default is 5. Note that nodes with sizes smaller than
+\code{min.node.size} can occur.}
 
 \item{mtry}{Number of covariates randomly selected as candidates at each
 split. Default is \code{sqrt(p)}, indicated by \code{-1}.}
 
 \item{seed}{The seed of the C++ random number generator.}
 
-\item{est.method}{Parameter estimation method for the Dirichlet distribution
-when splitting is done. Users may either use maximum likelihood
-(\code{"mle"}) or method of moments (\code{"mom"}). Default is
-\code{"mom"}.}
+\item{est.method}{Parameter estimation method for the Dirichlet
+distribution when splitting is done. Users may either use maximum
+likelihood (\code{"mle"}) or method of moments (\code{"mom"}).
+Default is \code{"mom"}.}
 
-\item{num.cores}{Building a Dirichlet tree is computationally heavy.
-Therefore, the forest can be built over multiple cores. The default is
-\code{-1} which uses all the cores on the system minus 1. Users may also
-specify \code{1} which means that the forest will be built sequentially.}
+\item{num.cores}{Number of OpenMP threads used for parallel tree building.
+The default is \code{-1} which uses all the cores on the system minus 1.
+Users may also specify \code{1} which means that the forest will be
+built sequentially.}
 }
 \value{
-A \code{dirichlet_forest} object containing the following
-user-accessible components:
+A list of the forest which contains the following:
 \describe{
-\item{\code{type}}{Parallelisation type used: \code{"sequential"},
-\code{"fork"}, or \code{"cluster"}.}
+\item{\code{type}}{Parallelisation type used: \code{"openmp"} or
+\code{"sequential"}.}
 \item{\code{num.cores}}{Number of cores used.}
-\item{\code{trees.per.worker}}{Number of trees assigned to each worker.}
 \item{\code{num.trees}}{Total number of trees in the forest.}
 \item{\code{Y_train}}{Training data used (no OOB).}
 \item{\code{fitted}}{A list of fitted values:
@@ -62,25 +60,25 @@ user-accessible components:
 \item{\code{alpha_hat}}{Estimated Dirichlet alpha parameters
 (n x k matrix).}
 \item{\code{mean_based}}{Mean-based fitted values (n x k matrix).}
-\item{\code{param_based}}{Parameter-based fitted values obtained by
-normalising \code{alpha_hat} (n x k matrix).}
+\item{\code{param_based}}{Parameter-based fitted values obtained
+by normalising \code{alpha_hat} (n x k matrix).}
 }
 }
 \item{\code{residuals}}{A list of residuals (Y - fitted):
 \describe{
 \item{\code{mean_based}}{Residuals from mean-based predictions.}
-\item{\code{param_based}}{Residuals from parameter-based predictions.}
+\item{\code{param_based}}{Residuals from parameter-based
+predictions.}
 }
 }
 }
 }
 \description{
-Build a Dirichlet regression forest for compositional responses. In
+Build a Dirichlet random forest for compositional responses. In
 compositional data analysis (CoDA), parts reside in the simplex, and this
-regression forest ensures model output abide by CoDA principles. The
-implementation can be done using parallel processing. Note that
-out-of-bag (OOB) error is not available in the current version; each tree
-is built on the entire training sample with no sample fraction used.
+random forest ensures model output abide by CoDA principles. The
+implementation uses OpenMP for parallel tree building. Note that this implementation
+does not support out-of-bag (OOB) error estimation.
 }
 \details{
 The forest provides two types of fitted values: mean-based predictions
@@ -88,66 +86,38 @@ The forest provides two types of fitted values: mean-based predictions
 (derived from normalised Dirichlet alpha parameters).
 }
 \examples{
-\donttest{
-library(DirichletRF)
-n <- 300; p <- 4
+# Small toy example (auto-tested)
+set.seed(42)
+n <- 50; p <- 2
 X <- matrix(rnorm(n * p), n, p)
+G <- matrix(rgamma(n * 3, shape = rep(c(2, 3, 4), each = n)), n, 3)
+Y <- G / rowSums(G)
+forest <- DirichletRF(X, Y, num.trees = 5, num.cores = 1)
+print(forest)
+Xtest <- matrix(rnorm(5 * p), 5, p)
+pred  <- predict(forest, Xtest)
 
-# Generate Dirichlet with three parts from independent Gamma random variables
+\donttest{
+# Larger example
+n <- 500; p <- 4
+X <- matrix(rnorm(n * p), n, p)
 alpha <- c(2, 3, 4)
-G <- matrix(rgamma(n * length(alpha), shape = rep(alpha, each = n)), n, length(alpha))
+G <- matrix(rgamma(n * length(alpha), shape = rep(alpha, each = n)),
+            n, length(alpha))
 Y <- G / rowSums(G)
 
-# ========================================
-# FITTING MODELS
-# ========================================
-
-# Fit models in two examples. 1) Using "mom", and 2) using "mle"
-# Example 1 - Using method of moments
 forest1 <- DirichletRF(X, Y, num.trees = 100, num.cores = 1)
+forest2 <- DirichletRF(X, Y, num.trees = 100)
 
-# Example 2 - Using maximum likelihood
-forest2 <- DirichletRF(X, Y, num.trees = 50, est.method = "mle", num.cores = 1)
-
-# ========================================
-# ACCESSING FITTED VALUES AND RESIDUALS
-# ========================================
-
-# Three types of fitted values
-alpha_hat  <- forest1$fitted$alpha_hat    # Estimated Dirichlet parameters
-mean_fit   <- forest1$fitted$mean_based   # Predictions from sample means
-param_fit  <- forest1$fitted$param_based  # Predictions from normalised parameters
-
-# Corresponding residuals
+alpha_hat   <- forest1$fitted$alpha_hat
+mean_fit    <- forest1$fitted$mean_based
+param_fit   <- forest1$fitted$param_based
 resid_mean  <- forest1$residuals$mean_based
 resid_param <- forest1$residuals$param_based
 
-# ========================================
-# MAKING PREDICTIONS
-# ========================================
-
-# Create test data
 Xtest <- matrix(rnorm(10 * p), 10, p)
-
-# Make predictions
-pred <- predict(forest1, Xtest)
-
-# Access different prediction types
-print(pred$mean_predictions)   # Direct mean-based predictions
-print(pred$alpha_predictions)  # Estimated Dirichlet parameters
-
-# Parameter-based predictions (normalised alphas)
+pred  <- predict(forest1, Xtest)
 param_pred <- pred$alpha_predictions / rowSums(pred$alpha_predictions)
-print(param_pred)
-
-
-# ========================================
-# CLEANUP
-# ========================================
-
-# Always clean up at the end, especially important on Windows
-cleanupForest(forest1)
-cleanupForest(forest2)
 }
 
 }
@@ -159,5 +129,4 @@ Methods and Applications}. CRC Press.
 }
 \seealso{
 \code{\link{predict.dirichlet_forest}} for making predictions on new data.
-\code{\link{cleanupForest}} for releasing cluster resources on Windows.
 }
