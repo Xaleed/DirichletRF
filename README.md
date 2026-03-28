@@ -3,26 +3,28 @@
   <img src="assets/DirichletRF.jpg" alt="DirichletRF Logo" width="200"/>
 </p>
 
-
-This repository contains an implementation of a **parallel Dirichlet Random Forest**, designed for modeling **compositional data**.  
-
-⚠️ **Note**: This project is still in progress. For a simpler and more stable version, see my [DirichletRandom](https://github.com/Xaleed/DirichletRF.git) repository.  
+This repository contains an implementation of a **parallel Dirichlet Random Forest**, designed for modeling **compositional data** in accordance with compositional data analysis (CoDA) principles.
 
 ---
 
-## 📦 Installation  
+## 📦 Installation
 
-### Option 1: Clone this repository and install locally in R:  
+### Option 1: Install from CRAN
+```r
+install.packages("DirichletRF")
+```
+
+### Option 2: Install from GitHub
 ```r
 devtools::install_github("Xaleed/DirichletRF")
 ```
 
-### Option 2: Install pre-built binary (no Rtools required - Windows only)
+### Option 3: Install pre-built binary (no Rtools required — Windows only)
 
 Download and install the latest binary release:
 ```r
 # Replace v0.1.0 with the latest release version
-install.packages("https://github.com/Xaleed/DirichletForestParallel/releases/download/v0.1.0/DirichletRF_0.1.0.zip", 
+install.packages("https://github.com/Xaleed/DirichletRF/releases/download/v0.1.0/DirichletRF_0.1.0.zip",
                  repos = NULL, type = "win.binary")
 ```
 
@@ -42,216 +44,194 @@ n <- 500
 p <- 4
 X <- matrix(rnorm(n * p), n, p)
 
-# Generate Dirichlet responses
-if (!requireNamespace("MCMCpack", quietly = TRUE)) {
-  install.packages("MCMCpack")
-}
+# Generate compositional responses
 alpha <- c(2, 3, 4)
-Y <- MCMCpack::rdirichlet(n, alpha)
+G <- matrix(rgamma(n * length(alpha), shape = rep(alpha, each = n)), n, length(alpha))
+Y <- G / rowSums(G)
 
-# Fit a distributed Dirichlet Forest with 50 trees using 3 cores
-df_par <- DirichletForest_distributed(X, Y, B = 50, n_cores = 3)
+# Fit a Dirichlet Forest with 100 trees (uses all cores minus one by default)
+forest <- DirichletRF(X, Y, num.trees = 100)
+
+# Print a summary of the fitted model
+print(forest)
 
 # Predict on new data
 X_test <- matrix(rnorm(10 * p), 10, p)
-pred <- predict_distributed_forest(df_par, X_test)
+pred <- predict(forest, X_test)
 
 # Access predictions
-print(pred$mean_predictions)      # Mean-based predictions
-print(pred$alpha_predictions)     # Estimated Dirichlet parameters
+print(pred$mean_predictions)       # Mean-based predictions
+print(pred$alpha_predictions)      # Estimated Dirichlet alpha parameters
+
+# Normalise alpha predictions to get parameter-based predictions
+param_pred <- pred$alpha_predictions / rowSums(pred$alpha_predictions)
 
 # Access fitted values
-print(df_par$fitted$alpha_hat)      # Estimated parameters (α̂)
-print(df_par$fitted$mean_based)     # Fitted values from sample means
-print(df_par$fitted$param_based)    # Fitted values from normalized parameters
+print(forest$fitted$alpha_hat)     # Estimated alpha parameters (α̂)
+print(forest$fitted$mean_based)    # Fitted values from sample means
+print(forest$fitted$param_based)   # Fitted values from normalised parameters
 
 # Access residuals
-print(df_par$residuals$mean_based)   # Residuals for mean-based predictions
-print(df_par$residuals$param_based)  # Residuals for parameter-based predictions
-
-# Clean up cluster resources (important for Windows)
-cleanup_distributed_forest(df_par)
+print(forest$residuals$mean_based)  # Residuals for mean-based predictions
+print(forest$residuals$param_based) # Residuals for parameter-based predictions
 ```
 
 ---
 
 ## 🔧 Key Features
 
-### **Parallel Processing**
-- **Automatic detection**: Uses fork-based parallelization on Unix/Mac and cluster-based on Windows
-- **Flexible cores**: Set `n_cores = -1` to use all available cores minus one, or specify exact number
-- **Sequential fallback**: Small forests automatically run sequentially for efficiency
+### **Parallel Processing via OpenMP**
+- Trees are built in parallel using **OpenMP** directly in C++
+- Set `num.cores = -1` (default) to use all available cores minus one
+- Set `num.cores = 1` to build sequentially
+- No cluster setup or cleanup required
 
 ### **Two Prediction Modes**
 
-####  `store_samples = FALSE` (Default)
-Pre-computes predictions at training time:
+#### Mean-Based Predictions
+Predictions are computed as the average of compositional responses within each terminal node, then averaged across all trees:
 ```r
-df <- DirichletForest_distributed(X, Y, B = 100, store_samples = FALSE)
-pred <- predict_distributed_forest(df, X_test)
+pred <- predict(forest, X_test)
+print(pred$mean_predictions)
 ```
 
-#### Weight-Based Mode: `store_samples = TRUE`
-Stores sample indices for distributional predictions and weight analysis:
+#### Parameter-Based Predictions
+Predictions are derived from the estimated Dirichlet alpha parameters within each terminal node, then normalised:
 ```r
-df_weights <- DirichletForest_distributed(X, Y, B = 100, store_samples = TRUE)
-
-# Option 1: Use leaf predictions (default for fitted values)
-pred <- predict_distributed_forest(df_weights, X_test, use_leaf_predictions = TRUE)
-
-# Option 2: Use weight-based predictions for deeper analysis
-pred_weights <- predict_distributed_forest(df_weights, X_test, use_leaf_predictions = FALSE)
-
-# Get weight matrix for all test samples
-weights_matrix <- get_weight_matrix_distributed(df_weights, X_test)
-print(dim(weights_matrix$weight_matrix))  # test_samples x training_samples
-
-# Verify predictions using weight matrix
-manual_pred <- weights_matrix$weight_matrix %*% weights_matrix$Y_values
+param_pred <- pred$alpha_predictions / rowSums(pred$alpha_predictions)
 ```
 
 ### **Parameter Estimation**
-Choose between Method of Moments (`method = "mom"`, default) or Maximum Likelihood Estimation (`method = "mle"`):
+Choose between Method of Moments (`est.method = "mom"`, default) or Maximum Likelihood Estimation (`est.method = "mle"`):
 ```r
-df_mle <- DirichletForest_distributed(X, Y, method = "mle")
+forest_mle <- DirichletRF(X, Y, est.method = "mle")
 ```
 
-### **Multiple Fitted Values and Residuals**
-The model provides three types of fitted values:
-- **`alpha_hat`**: Estimated Dirichlet concentration parameters (α̂)
-- **`mean_based`**: Predictions computed from sample means in terminal nodes
-- **`param_based`**: Predictions computed from normalized estimated parameters
-
+### **Fitted Values and Residuals**
+The model automatically computes and stores three types of fitted values and two types of residuals after training:
 ```r
-# Access different types of fitted values
-alpha_estimates <- df_par$fitted$alpha_hat      # Parameter estimates
-mean_fitted <- df_par$fitted$mean_based         # Mean-based fitted values
-param_fitted <- df_par$fitted$param_based       # Parameter-based fitted values
+# Fitted values
+alpha_hat   <- forest$fitted$alpha_hat     # Estimated concentration parameters (α̂)
+mean_fit    <- forest$fitted$mean_based    # Mean-based fitted values
+param_fit   <- forest$fitted$param_based   # Parameter-based fitted values
 
-# Compare residual performance
-rmse_mean <- sqrt(mean(df_par$residuals$mean_based^2))
-rmse_param <- sqrt(mean(df_par$residuals$param_based^2))
+# Residuals (Y - fitted)
+resid_mean  <- forest$residuals$mean_based
+resid_param <- forest$residuals$param_based
+
+# Compare RMSE
+rmse_mean  <- sqrt(mean(resid_mean^2))
+rmse_param <- sqrt(mean(resid_param^2))
 print(paste("RMSE (mean-based):", round(rmse_mean, 4)))
 print(paste("RMSE (param-based):", round(rmse_param, 4)))
-```
-
-**Note**: When `store_samples = TRUE`, the fitted values are computed using pre-computed leaf predictions by default (`use_leaf_predictions = TRUE`). Set `use_leaf_predictions = FALSE` in the model fitting function to use weight-based predictions for fitted values instead:
-```r
-# Use weight-based predictions for fitted values
-df_weights <- DirichletForest_distributed(X, Y, B = 100, 
-                                          store_samples = TRUE, 
-                                          use_leaf_predictions = FALSE)
-```
-
----
-
-## 📊 Example: Working with Weight Matrices
-
-```r
-# Train with weight-based mode
-df <- DirichletForest_distributed(X, Y, B = 100, store_samples = TRUE)
-
-# Get weight matrix for multiple test samples
-X_test <- matrix(rnorm(20 * p), 20, p)
-weights <- get_weight_matrix_distributed(df, X_test)
-
-# Examine weight matrix structure
-dim(weights$weight_matrix)  # 20 test samples x n training samples
-cat("Sparsity:", sum(weights$weight_matrix > 1e-10) / length(weights$weight_matrix), "\n")
-
-# Find most influential training samples for first test sample
-top_5_idx <- order(weights$weight_matrix[1, ], decreasing = TRUE)[1:5]
-print("Top 5 most influential training samples:")
-print(data.frame(
-  train_index = top_5_idx,
-  weight = round(weights$weight_matrix[1, top_5_idx], 4)
-))
-
-# Verify predictions match weight-based computation
-pred <- predict_distributed_forest(df, X_test, use_leaf_predictions = FALSE)
-manual_pred <- weights$weight_matrix %*% weights$Y_values
-cat("Max prediction difference:", max(abs(pred$mean_predictions - manual_pred)), "\n")
-
-# Cleanup
-cleanup_distributed_forest(df)
 ```
 
 ---
 
 ## ⚙️ Function Reference
 
-### `DirichletForest_distributed()`
-Main function to build a distributed forest.
+### `DirichletRF()`
+Main function to build a Dirichlet Random Forest.
 
 **Parameters:**
-- `X`: Predictor matrix (n × p)
-- `Y`: Compositional response matrix (n × k), rows sum to 1
-- `B`: Number of trees (default: 100)
-- `d_max`: Maximum tree depth (default: 10)
-- `n_min`: Minimum samples per leaf (default: 5)
-- `m_try`: Features to try at each split, -1 for sqrt(p) (default: -1)
-- `seed`: Random seed (default: 123)
-- `method`: Parameter estimation, "mom" or "mle" (default: "mom")
-- `store_samples`: Enable weight-based predictions (default: FALSE)
-- `n_cores`: Number of cores, -1 for auto-detect (default: -1)
-- `use_leaf_predictions`:  If TRUE, uses pre-computed leaf predictions for fitted values even when store_samples = TRUE (each tree contributes its leaf prediction, then averaged). If FALSE, gathers all related training samples across all trees and estimates parameters from this pooled weighted set. This affects the fitted values and residuals returned by the function (default: TRUE)
+- `X`: Numeric predictor matrix (n × p). Only numeric covariates are supported; use one-hot encoding for categorical variables.
+- `Y`: Compositional response matrix (n × k); rows must sum to 1
+- `num.trees`: Number of trees (default: `100`)
+- `max.depth`: Maximum tree depth (default: `10`)
+- `min.node.size`: Minimum observations per leaf (default: `5`)
+- `mtry`: Number of candidate features at each split; `-1` uses `sqrt(p)` (default: `-1`)
+- `seed`: Random seed for the C++ RNG (default: `123`)
+- `est.method`: Dirichlet parameter estimation method, `"mom"` or `"mle"` (default: `"mom"`)
+- `num.cores`: Number of OpenMP threads; `-1` uses all cores minus one (default: `-1`)
 
-**Returns:** A list containing:
-- `fitted`: List with `alpha_hat` (parameter estimates), `mean_based` (mean-based fitted values), `param_based` (parameter-based fitted values)
+**Note:** Out-of-bag (OOB) error estimation is not supported in this version.
+
+**Returns:** A `dirichlet_forest` object containing:
+- `type`: Parallelisation type (`"openmp"` or `"sequential"`)
+- `num.cores`: Number of cores used
+- `num.trees`: Total number of trees
+- `Y_train`: Training responses
+- `fitted`: List with `alpha_hat`, `mean_based`, and `param_based` fitted values
 - `residuals`: List with `mean_based` and `param_based` residuals
-- `type`: Forest type ("sequential", "fork", or "cluster")
-- Additional components depending on forest type
 
-### `predict_distributed_forest()`
-Make predictions with a trained forest.
+---
 
-**Parameters:**
-- `distributed_forest`: Trained forest object
-- `X_new`: New predictor matrix (or vector for single sample)
-- `method`: Parameter estimation method (default: "mom")
-- `use_leaf_predictions`: If TRUE, uses pre-computed leaf predictions. If FALSE, uses weight-based predictions (default: TRUE)
-
-**Returns:** List with `alpha_predictions` (estimated Dirichlet parameters) and `mean_predictions` (mean-based predictions)
-
-### `get_weight_matrix_distributed()`
-Get weight matrix for multiple test observations (requires `store_samples = TRUE`).
+### `predict.dirichlet_forest()`
+Make predictions with a trained forest. Called via the standard `predict()` generic.
 
 **Parameters:**
-- `distributed_forest`: Trained forest object with `store_samples = TRUE`
-- `X_test`: Test predictor matrix (m × p) or vector
+- `object`: A `dirichlet_forest` object returned by `DirichletRF()`
+- `newdata`: Numeric matrix of new covariates (n_new × p), or a vector for a single observation
+- `...`: Currently unused
 
-**Returns:** List with:
-- `weight_matrix`: Matrix (m × n) where entry [i,j] is the weight of training sample j for test sample i
-- `sample_indices`: Integer vector 1:n (all training indices)
-- `Y_values`: Matrix of training Y values (n × k)
+**Returns:** A list with:
+- `alpha_predictions`: Estimated Dirichlet alpha parameters (n_new × k matrix)
+- `mean_predictions`: Mean-based compositional predictions (n_new × k matrix)
+```r
+pred <- predict(forest, X_test)
 
-### `get_leaf_predictions_distributed()`
-Convenience wrapper for getting pre-computed leaf predictions when `store_samples = TRUE`.
+# Mean-based predictions
+print(pred$mean_predictions)
 
-**Parameters:**
-- `distributed_forest`: Trained forest object
-- `X_new`: New predictor matrix
+# Parameter-based predictions (normalise alpha)
+param_pred <- pred$alpha_predictions / rowSums(pred$alpha_predictions)
 
-**Returns:** List with `alpha_predictions` and `mean_predictions` from leaf nodes
+# Single observation prediction
+single_pred <- predict(forest, X_test[1, , drop = FALSE])
+```
 
-### `cleanup_distributed_forest()`
-Clean up cluster resources (essential on Windows).
+---
+
+### `print.dirichlet_forest()`
+Prints a concise summary of the fitted model, suppressing large data structures.
+```r
+print(forest)
+# ============================================
+# Dirichlet Forest Model
+# ============================================
+#  Type:          openmp
+#  Total Trees:   100
+#  Cores Used:    7
+#  Training Data: 500 observations (n) x 3 components (k)
+# --------------------------------------------
+#  Note: Large data structures (fitted values,
+#        residuals) are suppressed.
+#
+#  Access via:
+#    $Y_train
+#    $fitted$alpha_hat
+#    $fitted$mean_based
+#    $fitted$param_based
+#    $residuals$mean_based
+#    $residuals$param_based
+# ============================================
+```
 
 ---
 
 ## 💡 Tips
 
-1. **Windows users**: Always call `cleanup_distributed_forest()` when done to properly close worker processes
-2. **Small forests**: For B < 10 trees, sequential processing is automatically used
+1. **Numeric covariates only**: The current version does not support categorical covariates directly. Use one-hot encoding as a workaround.
+2. **Normalised responses**: Ensure rows of `Y` sum to 1 before fitting.
+3. **Core selection**: `num.cores = -1` (default) automatically uses all available cores minus one. Use `num.cores = 1` for fully sequential execution.
+4. **OOB not available**: This implementation does not support out-of-bag error estimation.
+5. **Parameter vs mean predictions**: Use `mean_predictions` for averaging-based results and normalised `alpha_predictions` for parameter-based results.
 
-4. **Fitted values**: When `store_samples = TRUE`, fitted values are computed using pre-computed leaf predictions by default for efficiency. Set `use_leaf_predictions = FALSE` if you need weight-based fitted values
-5. **Weight matrices**: Use `get_weight_matrix_distributed()` to analyze which training samples influence predictions most
-
-
+---
 
 ## 📄 License
 
-This project is open source and available under standard licensing terms.
+GPL-3
+
+---
+
+## 📚 Reference
+
+Masoumifard, K., van der Westhuizen, S., & Gardner-Lubbe, S. (2026).
+Dirichlet random forest for predicting compositional data.
+In A. Bekker, P. Nagar, J. Ferreira, B. Erasmus, & A. Ramoelo (Eds.),
+Environmental Modelling with Contemporary Statistics: Learning, Directionality, and Space-Time Dynamics.
+Chapman & Hall/CRC. ISBN: 9781032903910.
 
 ---
 

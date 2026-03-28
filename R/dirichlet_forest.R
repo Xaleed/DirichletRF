@@ -93,10 +93,11 @@
 #' }
 #'
 #' @references
-#' Masoumifard, K., van der Westhuizen, S., & Gardner-Lubbe, S. (In press).
-#' Dirichlet-random forest for predicting compositional data. In A. Bekker,
-#' J. Ferreira, & P. Nagar (Eds.), \emph{Environmental Statistics: Innovative
-#' Methods and Applications}. CRC Press.
+#' Masoumifard, K., van der Westhuizen, S., & Gardner-Lubbe, S. (2026).
+#' Dirichlet random forest for predicting compositional data.
+#' In A. Bekker, P. Nagar, J. Ferreira, B. Erasmus, & A. Ramoelo (Eds.),
+#' Environmental Modelling with Contemporary Statistics: Learning, Directionality, and Space-Time Dynamics.
+#' Chapman & Hall/CRC. ISBN: 9781032903910.
 #'
 #' @seealso
 #' \code{\link{predict.dirichlet_forest}} for making predictions on new data.
