@@ -356,7 +356,9 @@ SplitResult FindBestSplit(const std::vector<double>& X_vec,
                           const std::vector<int>&    feature_subset,
                           int                        n_features,
                           int                        n_classes,
-                          const std::string&         method) {
+                          const std::string&         method,
+                          std::vector<double>&       importance_gain,
+                          std::vector<int>&          importance_count) {
     SplitResult best;
     best.gain    = -std::numeric_limits<double>::infinity();
     best.feature = -1;
@@ -418,6 +420,12 @@ SplitResult FindBestSplit(const std::vector<double>& X_vec,
         }
     }
 
+    // Accumulate importance for the winning feature
+    if (best.feature != -1 && best.gain > 0.0) {
+        importance_gain[best.feature]  += best.gain;
+        importance_count[best.feature] += 1;
+    }
+
     return best;
 }
 
@@ -435,7 +443,9 @@ Node* GrowTree(const std::vector<double>& X_vec,
                int                        m_try,
                std::mt19937&              gen,
                const std::string&         method,
-               bool                       store_samples) {
+               bool                       store_samples,
+               std::vector<double>&       importance_gain,
+               std::vector<int>&          importance_count) {
     Node* node = new Node();
 
     if ((int)indices.size() < n_min || current_depth >= d_max ||
@@ -453,7 +463,8 @@ Node* GrowTree(const std::vector<double>& X_vec,
                                     std::min(m_try, n_features));
 
     SplitResult split = FindBestSplit(X_vec, Y_vec, indices, feature_subset,
-                                      n_features, n_classes, method);
+                                      n_features, n_classes, method,
+                                      importance_gain, importance_count);
 
     if (split.gain <= 0.0 || split.feature == -1) {
         FitTerminalNode(node, Y_vec, indices, n_classes, method, store_samples);
@@ -466,10 +477,12 @@ Node* GrowTree(const std::vector<double>& X_vec,
 
     node->left  = GrowTree(X_vec, Y_vec, n_features, n_classes,
                             split.left_indices,  current_depth + 1,
-                            d_max, n_min, m_try, gen, method, store_samples);
+                            d_max, n_min, m_try, gen, method, store_samples,
+                            importance_gain, importance_count);
     node->right = GrowTree(X_vec, Y_vec, n_features, n_classes,
                             split.right_indices, current_depth + 1,
-                            d_max, n_min, m_try, gen, method, store_samples);
+                            d_max, n_min, m_try, gen, method, store_samples,
+                            importance_gain, importance_count);
 
     return node;
 }
@@ -534,6 +547,12 @@ List DirichletForest(NumericMatrix X, NumericMatrix Y, int B = 100,
 
     std::vector<Node*> forest(B, nullptr);
 
+    // Per-tree importance accumulators (one vector per tree for thread safety)
+    std::vector<std::vector<double>> tree_imp_gain(B,
+        std::vector<double>(n_features, 0.0));
+    std::vector<std::vector<int>> tree_imp_count(B,
+        std::vector<int>(n_features, 0));
+
     // Parallel tree building — all code inside uses pure STL only
     #ifdef _OPENMP
     #pragma omp parallel for schedule(dynamic)
@@ -545,7 +564,18 @@ List DirichletForest(NumericMatrix X, NumericMatrix Y, int B = 100,
 
         forest[b] = GrowTree(X_vec, Y_vec, n_features, n_classes,
                              indices, 0, d_max, n_min, m_try,
-                             generators[b], method, store_samples);
+                             generators[b], method, store_samples,
+                             tree_imp_gain[b], tree_imp_count[b]);
+    }
+
+    // Aggregate importance across trees
+    std::vector<double> imp_gain(n_features, 0.0);
+    std::vector<int>    imp_count(n_features, 0);
+    for (int b = 0; b < B; b++) {
+        for (int f = 0; f < n_features; f++) {
+            imp_gain[f]  += tree_imp_gain[b][f];
+            imp_count[f] += tree_imp_count[b][f];
+        }
     }
 
     // Wrap back into Rcpp AFTER parallel region
@@ -554,11 +584,13 @@ List DirichletForest(NumericMatrix X, NumericMatrix Y, int B = 100,
         forest_ptrs[i] = XPtr<Node>(forest[i], true);
 
     List result = List::create(
-        Named("forest")        = forest_ptrs,
-        Named("n_trees")       = B,
-        Named("n_features")    = n_features,
-        Named("n_classes")     = n_classes,
-        Named("store_samples") = store_samples
+        Named("forest")           = forest_ptrs,
+        Named("n_trees")          = B,
+        Named("n_features")       = n_features,
+        Named("n_classes")        = n_classes,
+        Named("store_samples")    = store_samples,
+        Named("importance_gain")  = imp_gain,
+        Named("importance_count") = imp_count
     );
 
     if (store_samples) {
@@ -780,6 +812,3 @@ List GetSampleWeights(List forest_model, NumericVector test_sample) {
         Named("Y_values")       = Y_weighted
     );
 }
-
-
-

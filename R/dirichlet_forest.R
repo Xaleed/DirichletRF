@@ -135,12 +135,32 @@ DirichletRF <- function(X, Y, num.trees = 100, max.depth = 10,
                             store_samples = store_samples,
                             num_cores     = num.cores)
 
+  # Extract feature importance from the C++ forest object
+  imp_gain  <- forest$importance_gain   # sum of likelihood gains per feature
+  imp_count <- forest$importance_count  # number of times selected for a split
+
+  # Normalise gain importance to sum to 1 (makes forests comparable)
+  imp_gain_norm <- if (sum(imp_gain) > 0) imp_gain / sum(imp_gain)
+                   else rep(0, length(imp_gain))
+
+  # Attach feature names if X has column names
+  feat_names <- if (!is.null(colnames(X))) colnames(X)
+                else paste0("X", seq_len(ncol(X)))
+  names(imp_gain)      <- feat_names
+  names(imp_gain_norm) <- feat_names
+  names(imp_count)     <- feat_names
+
   result <- list(
     type      = par_type,
     forest    = forest,
     num.cores = num.cores,
     num.trees = num.trees,
-    Y_train   = Y
+    Y_train   = Y,
+    importance = list(
+      gain            = imp_gain,
+      gain_normalised = imp_gain_norm,
+      count           = imp_count
+    )
   )
   class(result) <- c("dirichlet_forest", "list")
 
@@ -203,6 +223,10 @@ print.dirichlet_forest <- function(x, ...) {
     "   $fitted$param_based\n",
     "   $residuals$mean_based\n",
     "   $residuals$param_based\n",
+    "   $importance$gain\n",
+    "   $importance$gain_normalised\n",
+    "   $importance$count\n",
+    " Use importance(forest) for a summary table.\n",
     "============================================\n",
     sep = ""
   )
@@ -283,4 +307,59 @@ predict.dirichlet_forest <- function(object, newdata, ...) {
   return(PredictDirichletForest(object$forest, X_new,
                                 method               = est.method,
                                 use_leaf_predictions = use_leaf_predictions))
+}
+
+
+#' Feature Importance for a Dirichlet Forest
+#'
+#' Returns a data frame summarising feature importance from a fitted
+#' \code{dirichlet_forest} object. Two measures are provided:
+#' \describe{
+#'   \item{\code{gain}}{Total likelihood gain accumulated across all splits
+#'     where this feature was selected (raw, summed over all trees).}
+#'   \item{\code{gain_normalised}}{Same as \code{gain} but normalised to
+#'     sum to 1 across all features, making values comparable across
+#'     forests of different sizes.}
+#'   \item{\code{count}}{Number of times the feature was chosen as the
+#'     best split variable across all trees and all internal nodes.}
+#' }
+#' The data frame is sorted by \code{gain_normalised} in descending order.
+#'
+#' @param object A \code{dirichlet_forest} object returned by
+#'   \code{\link{DirichletRF}}.
+#' @param ... Currently unused.
+#'
+#' @return A data frame with columns \code{feature}, \code{gain},
+#'   \code{gain_normalised}, and \code{count}, sorted by
+#'   \code{gain_normalised} descending.
+#'
+#' @examples
+#' set.seed(42)
+#' n <- 50; p <- 4
+#' X <- matrix(rnorm(n * p), n, p)
+#' colnames(X) <- paste0("X", 1:p)
+#' G <- matrix(rgamma(n * 3, shape = rep(c(2, 3, 4), each = n)), n, 3)
+#' Y <- G / rowSums(G)
+#' forest <- DirichletRF(X, Y, num.trees = 10, num.cores = 1)
+#' importance(forest)
+#'
+#' @export
+importance <- function(object, ...) UseMethod("importance")
+#' @export
+importance.dirichlet_forest <- function(object, ...) {
+  imp <- object$importance
+  if (is.null(imp))
+    stop("No importance information found. Please refit with the current version.")
+
+  df <- data.frame(
+    feature         = names(imp$gain),
+    gain            = unname(imp$gain),
+    gain_normalised = unname(imp$gain_normalised),
+    count           = unname(imp$count),
+    stringsAsFactors = FALSE
+  )
+
+  df <- df[order(df$gain_normalised, decreasing = TRUE), ]
+  rownames(df) <- NULL
+  df
 }
