@@ -202,7 +202,7 @@
 #'
 #' @seealso
 #' \code{\link{predict.dirichlet_forest}} for making predictions on new data.
-#' \code{\link{importance.dirichlet_forest}} for a summary of feature importance.
+#' \code{\link{importance}} for a summary of feature importance.
 #' @importFrom stats predict
 #' @export
 DirichletRF <- function(X, Y, num.trees = 100, max.depth = 10,
