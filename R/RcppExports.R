@@ -9,8 +9,8 @@ estimate_dirichlet_mle <- function(Y, max_iter = 10000L, tol = 1e-6, lambda = 1e
     .Call(`_DirichletRF_estimate_dirichlet_mle`, Y, max_iter, tol, lambda)
 }
 
-DirichletForest <- function(X, Y, B = 100L, d_max = 10L, n_min = 5L, m_try = -1L, seed = 123L, method = "mom", store_samples = FALSE, num_cores = 1L) {
-    .Call(`_DirichletRF_DirichletForest`, X, Y, B, d_max, n_min, m_try, seed, method, store_samples, num_cores)
+DirichletForest <- function(X, Y, B = 100L, d_max = 10L, n_min = 5L, m_try = -1L, seed = 123L, method = "mom", store_samples = FALSE, num_cores = 1L, replace = FALSE, sample_fraction = 1.0, compute_oob = FALSE) {
+    .Call(`_DirichletRF_DirichletForest`, X, Y, B, d_max, n_min, m_try, seed, method, store_samples, num_cores, replace, sample_fraction, compute_oob)
 }
 
 GetLeafPredictions <- function(forest_model, X_new) {

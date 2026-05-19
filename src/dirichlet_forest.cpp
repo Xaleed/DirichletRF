@@ -448,7 +448,7 @@ Node* GrowTree(const std::vector<double>& X_vec,
                std::vector<int>&          importance_count) {
     Node* node = new Node();
 
-    if ((int)indices.size() < n_min || current_depth >= d_max ||
+    if ((int)indices.size() < n_min || current_depth > d_max ||
         indices.empty()) {
         FitTerminalNode(node, Y_vec, indices, n_classes, method, store_samples);
         return node;
@@ -514,13 +514,19 @@ List DirichletForest(NumericMatrix X, NumericMatrix Y, int B = 100,
                      int d_max = 10, int n_min = 5, int m_try = -1,
                      int seed = 123, std::string method = "mom",
                      bool store_samples = false,
-                     int num_cores = 1) {
+                     int num_cores = 1,
+                     bool replace = false,
+                     double sample_fraction = 1.0,
+                     bool compute_oob = false) {
 
     int n_samples  = X.nrow();
     int n_features = X.ncol();
     int n_classes  = Y.ncol();
 
     if (m_try <= 0) m_try = std::max(1, (int)std::sqrt((double)n_features));
+
+    // Number of observations each tree is trained on
+    int n_inbag = std::max(1, (int)std::floor(sample_fraction * n_samples));
 
     #ifdef _OPENMP
     omp_set_num_threads(num_cores);
@@ -553,17 +559,42 @@ List DirichletForest(NumericMatrix X, NumericMatrix Y, int B = 100,
     std::vector<std::vector<int>> tree_imp_count(B,
         std::vector<int>(n_features, 0));
 
+    // Per-tree OOB index sets (only populated when compute_oob = true)
+    std::vector<std::vector<int>> oob_indices(B);
+
     // Parallel tree building — all code inside uses pure STL only
     #ifdef _OPENMP
     #pragma omp parallel for schedule(dynamic)
     #endif
     for (int b = 0; b < B; b++) {
-        std::vector<int> indices(n_samples);
-        std::iota(indices.begin(), indices.end(), 0);
-        std::shuffle(indices.begin(), indices.end(), generators[b]);
+        std::vector<int> inbag(n_inbag);
+
+        if (replace) {
+            // Bootstrap: sample n_inbag times with replacement
+            std::uniform_int_distribution<int> sampler(0, n_samples - 1);
+            for (int i = 0; i < n_inbag; i++)
+                inbag[i] = sampler(generators[b]);
+        } else {
+            // Subsample: draw n_inbag unique observations without replacement
+            std::vector<int> all(n_samples);
+            std::iota(all.begin(), all.end(), 0);
+            std::shuffle(all.begin(), all.end(), generators[b]);
+            inbag.assign(all.begin(), all.begin() + n_inbag);
+        }
+
+        // OOB indices — only needed when compute_oob = true
+        if (compute_oob) {
+            std::vector<bool> inbag_flag(n_samples, false);
+            for (int idx : inbag) inbag_flag[idx] = true;
+            std::vector<int> oob;
+            oob.reserve(n_samples - n_inbag);
+            for (int i = 0; i < n_samples; i++)
+                if (!inbag_flag[i]) oob.push_back(i);
+            oob_indices[b] = oob;
+        }
 
         forest[b] = GrowTree(X_vec, Y_vec, n_features, n_classes,
-                             indices, 0, d_max, n_min, m_try,
+                             inbag, 0, d_max, n_min, m_try,
                              generators[b], method, store_samples,
                              tree_imp_gain[b], tree_imp_count[b]);
     }
@@ -578,6 +609,49 @@ List DirichletForest(NumericMatrix X, NumericMatrix Y, int B = 100,
         }
     }
 
+    // OOB block — skipped entirely when compute_oob = false
+    double        oob_mse     = NA_REAL;
+    NumericMatrix oob_pred_mat(compute_oob ? n_samples : 1,
+                               compute_oob ? n_classes  : 1);
+    oob_pred_mat.fill(NA_REAL);
+
+    if (compute_oob) {
+        std::vector<std::vector<double>> oob_pred_sum(n_samples,
+            std::vector<double>(n_classes, 0.0));
+        std::vector<int> oob_pred_count(n_samples, 0);
+
+        for (int b = 0; b < B; b++) {
+            for (int i : oob_indices[b]) {
+                std::vector<double> sample(n_features);
+                for (int f = 0; f < n_features; f++)
+                    sample[f] = X_vec[i * n_features + f];
+                Node* leaf = FindLeafNode1D(forest[b], sample);
+                for (int j = 0; j < n_classes; j++)
+                    oob_pred_sum[i][j] += leaf->mean_prediction[j];
+                oob_pred_count[i]++;
+            }
+        }
+
+        double oob_mse_acc = 0.0;
+        int    oob_valid   = 0;
+        oob_pred_mat       = NumericMatrix(n_samples, n_classes);
+        oob_pred_mat.fill(NA_REAL);
+
+        for (int i = 0; i < n_samples; i++) {
+            if (oob_pred_count[i] == 0) continue;
+            double obs_mse = 0.0;
+            for (int j = 0; j < n_classes; j++) {
+                double pred  = oob_pred_sum[i][j] / oob_pred_count[i];
+                double resid = Y_vec[i * n_classes + j] - pred;
+                obs_mse += resid * resid;
+                oob_pred_mat(i, j) = pred;
+            }
+            oob_mse_acc += obs_mse / n_classes;
+            oob_valid++;
+        }
+        if (oob_valid > 0) oob_mse = oob_mse_acc / oob_valid;
+    }
+
     // Wrap back into Rcpp AFTER parallel region
     List forest_ptrs(B);
     for (int i = 0; i < B; i++)
@@ -590,7 +664,9 @@ List DirichletForest(NumericMatrix X, NumericMatrix Y, int B = 100,
         Named("n_classes")        = n_classes,
         Named("store_samples")    = store_samples,
         Named("importance_gain")  = imp_gain,
-        Named("importance_count") = imp_count
+        Named("importance_count") = imp_count,
+        Named("oob_mse")          = oob_mse,
+        Named("oob_predictions")  = oob_pred_mat
     );
 
     if (store_samples) {

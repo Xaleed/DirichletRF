@@ -3,12 +3,7 @@
 #' Build a Dirichlet random forest for compositional responses. In
 #' compositional data analysis (CoDA), parts reside in the simplex, and this
 #' random forest ensures model output abide by CoDA principles. The
-#' implementation uses OpenMP for parallel tree building. Note that this implementation
-#' does not support out-of-bag (OOB) error estimation.
-#'
-#' The forest provides two types of fitted values: mean-based predictions
-#' (derived from sample means at each leaf) and parameter-based predictions
-#' (derived from normalised Dirichlet alpha parameters).
+#' implementation uses OpenMP for parallel tree building.
 #'
 #' @param X A numeric (n x p) matrix of covariates. Note that the current
 #'   version only allows numeric covariates. Users may use one-hot encoding
@@ -31,64 +26,169 @@
 #'   The default is \code{-1} which uses all the cores on the system minus 1.
 #'   Users may also specify \code{1} which means that the forest will be
 #'   built sequentially.
+#' @param replace Logical. If \code{TRUE}, each tree is grown on a bootstrap
+#'   sample drawn with replacement. If \code{FALSE} (default), each tree is
+#'   grown on a subsample drawn without replacement. When \code{replace = FALSE}
+#'   and \code{sample.fraction = 1} (the default), every tree sees all \code{n}
+#'   observations and tree diversity comes entirely from random feature
+#'   subsetting controlled by \code{mtry}. When \code{replace = FALSE} and
+#'   \code{sample.fraction < 1}, each tree sees a different random subset of
+#'   the data, enabling out-of-bag estimation.
+#' @param sample.fraction Numeric. Fraction of observations used to grow each
+#'   tree, as a proportion of \code{n}. Default is \code{1.0}. When
+#'   \code{replace = FALSE}, must be in \code{(0, 1]}; values greater than 1
+#'   are not allowed since you cannot draw more unique observations than
+#'   available. When \code{replace = TRUE}, values greater than 1 are allowed
+#'   (e.g. \code{1.5} draws \code{1.5n} bootstrap observations), though
+#'   values in \code{(0, 1]} are most common. A warning is issued when
+#'   \code{sample.fraction < 0.1} regardless of \code{replace}, as trees
+#'   grown on very few observations tend to be unreliable.
+#' @param compute.oob Logical. If \code{TRUE}, computes out-of-bag (OOB)
+#'   predictions after the forest is built, using only trees for which each
+#'   observation was not in training. Both the OOB prediction matrix and a
+#'   scalar MSE are returned via \code{$oob$predictions} and \code{$oob$mse}.
+#'   Not available when \code{replace = FALSE} and \code{sample.fraction = 1}
+#'   since no held-out observations exist. Default is \code{FALSE}.
+#' 
+#' @details
+#' \strong{Out-of-Bag (OOB) Predictions}
 #'
-#' @return A list of the forest which contains the following:
+#' When \code{compute.oob = TRUE}, each observation is predicted by averaging
+#' over only the trees for which it was out-of-bag. This requires
+#' \code{replace = TRUE} or \code{replace = FALSE} with
+#' \code{sample.fraction < 1}. The reported \code{$oob$mse} is the MSE
+#' between OOB predictions and true responses, averaged over components and
+#' OOB observations. Note that MSE is not universally accepted for
+#' compositional data since it ignores the simplex geometry — the Aitchison
+#' distance, which operates in log-ratio space, is an alternative. The full
+#' OOB prediction matrix \code{$oob$predictions} (n x k, with \code{NA} for
+#' observations never out-of-bag) is returned so users can apply any
+#' alternative error measure directly.
+#'
+#' @return A list of class \code{dirichlet_forest} which contains the
+#'   following elements:
 #' \describe{
 #'   \item{\code{type}}{Parallelisation type used: \code{"openmp"} or
 #'     \code{"sequential"}.}
 #'   \item{\code{num.cores}}{Number of cores used.}
 #'   \item{\code{num.trees}}{Total number of trees in the forest.}
-#'   \item{\code{Y_train}}{Training data used (no OOB).}
-#'   \item{\code{fitted}}{A list of fitted values:
+#'   \item{\code{replace}}{Logical indicating whether bootstrap sampling
+#'     was used.}
+#'   \item{\code{sample.fraction}}{The fraction of observations used per
+#'     tree.}
+#'   \item{\code{compute.oob}}{Logical indicating whether OOB prediction was
+#'     computed.}
+#'   \item{\code{Y_train}}{The training compositional response matrix.}
+#'   \item{\code{fitted}}{A list of fitted values on the training data:
 #'     \describe{
 #'       \item{\code{alpha_hat}}{Estimated Dirichlet alpha parameters
 #'         (n x k matrix).}
-#'       \item{\code{mean_based}}{Mean-based fitted values (n x k matrix).}
-#'       \item{\code{param_based}}{Parameter-based fitted values obtained
-#'         by normalising \code{alpha_hat} (n x k matrix).}
+#'       \item{\code{mean_based}}{Mean-based fitted values (n x k matrix),
+#'         derived from sample means at each leaf.}
+#'       \item{\code{param_based}}{Parameter-based fitted values (n x k
+#'         matrix), obtained by normalising \code{alpha_hat} so rows sum
+#'         to 1.}
 #'     }
 #'   }
-#'   \item{\code{residuals}}{A list of residuals (Y - fitted):
+#'   \item{\code{residuals}}{A list of residuals (Y - fitted values):
 #'     \describe{
 #'       \item{\code{mean_based}}{Residuals from mean-based predictions.}
 #'       \item{\code{param_based}}{Residuals from parameter-based
 #'         predictions.}
 #'     }
 #'   }
+#'   \item{\code{importance}}{A list of feature importance measures:
+#'     \describe{
+#'       \item{\code{gain}}{Raw total likelihood gain per feature, summed
+#'         over all trees and all splits where the feature was selected.}
+#'       \item{\code{gain_normalised}}{Gain divided by total gain across
+#'         all features, summing to 1. Recommended for interpretation and
+#'         comparison across forests.}
+#'       \item{\code{count}}{Number of times each feature was selected as
+#'         the best split variable across all trees and all internal
+#'         nodes.}
+#'     }
+#'   }
+#'   \item{\code{oob}}{A list of OOB results. Both elements are \code{NA}
+#'     when \code{compute.oob = FALSE}:
+#'     \describe{
+#'       \item{\code{mse}}{Scalar OOB mean squared error, averaged over
+#'         all components and all observations that appeared OOB at least
+#'         once.}
+#'       \item{\code{predictions}}{An (n x k) matrix of OOB predictions.
+#'         Rows corresponding to observations that never appeared OOB are
+#'         \code{NA}.}
+#'     }
+#'   }
 #' }
 #'
 #' @examples
-#' # Small toy example (auto-tested)
+#' # ── Minimal example (auto-tested) ─────────────────────────────────────────
 #' set.seed(42)
 #' n <- 50; p <- 2
 #' X <- matrix(rnorm(n * p), n, p)
+#' colnames(X) <- paste0("X", 1:p)
 #' G <- matrix(rgamma(n * 3, shape = rep(c(2, 3, 4), each = n)), n, 3)
 #' Y <- G / rowSums(G)
+#'
+#' # Default: no bootstrap, no OOB, fastest configuration
 #' forest <- DirichletRF(X, Y, num.trees = 5, num.cores = 1)
 #' print(forest)
+#'
+#' # Feature importance
+#' importance(forest)
+#'
+#' # Prediction on new data
 #' Xtest <- matrix(rnorm(5 * p), 5, p)
+#' colnames(Xtest) <- paste0("X", 1:p)
 #' pred  <- predict(forest, Xtest)
+#' pred$mean_predictions
 #'
 #' \donttest{
-#' # Larger example
-#' n <- 500; p <- 4
+#' # ── Larger example with informative and noise covariates ───────────────────
+#' set.seed(42)
+#' n <- 200; p <- 6
 #' X <- matrix(rnorm(n * p), n, p)
-#' alpha <- c(2, 3, 4)
-#' G <- matrix(rgamma(n * length(alpha), shape = rep(alpha, each = n)),
-#'             n, length(alpha))
+#' colnames(X) <- paste0("X", 1:p)
+#'
+#' # X1 and X2 are informative, X3-X6 are noise
+#' alpha_mat <- cbind(
+#'   2 + 3 * (X[, 1] > 0),
+#'   3 + 3 * (X[, 2] > 0),
+#'   rep(4, n)
+#' )
+#' G <- matrix(rgamma(n * 3, shape = as.vector(t(alpha_mat))), n, 3,
+#'             byrow = TRUE)
 #' Y <- G / rowSums(G)
 #'
-#' forest1 <- DirichletRF(X, Y, num.trees = 100, num.cores = 1)
-#' forest2 <- DirichletRF(X, Y, num.trees = 100)
+#' # Default: no bootstrap, no OOB
+#' forest <- DirichletRF(X, Y, num.trees = 100, num.cores = 1)
 #'
-#' alpha_hat   <- forest1$fitted$alpha_hat
-#' mean_fit    <- forest1$fitted$mean_based
-#' param_fit   <- forest1$fitted$param_based
-#' resid_mean  <- forest1$residuals$mean_based
-#' resid_param <- forest1$residuals$param_based
+#' # Feature importance — X1 and X2 should dominate
+#' importance(forest)
 #'
+#' # Fitted values and residuals
+#' head(forest$fitted$mean_based)
+#' head(forest$residuals$mean_based)
+#'
+#' # ── Bootstrap with OOB ───────────────────────────────────────────────
+#' forest_oob <- DirichletRF(X, Y, num.trees = 100, num.cores = 1,
+#'                            replace = TRUE, sample.fraction = 1.0,
+#'                            compute.oob = TRUE)
+#' forest_oob$oob$mse
+#' head(forest_oob$oob$predictions)
+#'
+#' # ── Subsampling without replacement with OOB ───────────────────────────────
+#' forest_sub <- DirichletRF(X, Y, num.trees = 100, num.cores = 1,
+#'                            replace = FALSE, sample.fraction = 0.632,
+#'                            compute.oob = TRUE)
+#' forest_sub$oob$mse
+#'
+#' # ── Prediction ────────────────────────────────────────────────────────────
 #' Xtest <- matrix(rnorm(10 * p), 10, p)
-#' pred  <- predict(forest1, Xtest)
+#' colnames(Xtest) <- paste0("X", 1:p)
+#' pred <- predict(forest, Xtest)
+#' head(pred$mean_predictions)
 #' param_pred <- pred$alpha_predictions / rowSums(pred$alpha_predictions)
 #' }
 #'
@@ -96,16 +196,20 @@
 #' Masoumifard, K., van der Westhuizen, S., & Gardner-Lubbe, S. (2026).
 #' Dirichlet random forest for predicting compositional data.
 #' In A. Bekker, P. Nagar, J. Ferreira, B. Erasmus, & A. Ramoelo (Eds.),
-#' Environmental Modelling with Contemporary Statistics: Learning, Directionality, and Space-Time Dynamics.
+#' Environmental Modelling with Contemporary Statistics: Learning,
+#' Directionality, and Space-Time Dynamics.
 #' Chapman & Hall/CRC. ISBN: 9781032903910.
 #'
 #' @seealso
 #' \code{\link{predict.dirichlet_forest}} for making predictions on new data.
+#' \code{\link{importance.dirichlet_forest}} for a summary of feature importance.
 #' @importFrom stats predict
 #' @export
 DirichletRF <- function(X, Y, num.trees = 100, max.depth = 10,
                         min.node.size = 5, mtry = -1, seed = 123,
-                        est.method = "mom", num.cores = -1) {
+                        est.method = "mom", num.cores = -1,
+                        replace = FALSE, sample.fraction = 1.0,
+                        compute.oob = FALSE) {
 
   # Hardcoded for this version; will be exposed in a future release.
   store_samples <- FALSE
@@ -113,6 +217,21 @@ DirichletRF <- function(X, Y, num.trees = 100, max.depth = 10,
   # Input validation
   if (!is.matrix(X) || !is.matrix(Y)) stop("X and Y must be matrices")
   if (nrow(X) != nrow(Y)) stop("X and Y must have the same number of rows")
+
+  # applies to both
+  if (sample.fraction <= 0)
+    stop("sample.fraction must be positive")
+
+  # only meaningful for replace = FALSE
+  if (!replace && sample.fraction > 1)
+    stop("sample.fraction must be in (0, 1] when replace = FALSE")
+
+  if (sample.fraction < 0.1)
+    warning("sample.fraction < 0.1: trees will be grown on very few observations")
+
+  # OOB requires held-out observations
+  if (compute.oob && !replace && sample.fraction == 1.0)
+    stop("OOB is not available when replace = FALSE and sample.fraction = 1")
 
   # Resolve num.cores
   if (num.cores == -1) {
@@ -126,14 +245,17 @@ DirichletRF <- function(X, Y, num.trees = 100, max.depth = 10,
 
   # All parallelism handled inside C++ via OpenMP
   forest <- DirichletForest(X, Y,
-                            B             = num.trees,
-                            d_max         = max.depth,
-                            n_min         = min.node.size,
-                            m_try         = mtry,
-                            seed          = seed,
-                            method        = est.method,
-                            store_samples = store_samples,
-                            num_cores     = num.cores)
+                            B               = num.trees,
+                            d_max           = max.depth,
+                            n_min           = min.node.size,
+                            m_try           = mtry,
+                            seed            = seed,
+                            method          = est.method,
+                            store_samples   = store_samples,
+                            num_cores       = num.cores,
+                            replace         = replace,
+                            sample_fraction = sample.fraction,
+                            compute_oob     = compute.oob)
 
   # Extract feature importance from the C++ forest object
   imp_gain  <- forest$importance_gain   # sum of likelihood gains per feature
@@ -151,15 +273,22 @@ DirichletRF <- function(X, Y, num.trees = 100, max.depth = 10,
   names(imp_count)     <- feat_names
 
   result <- list(
-    type      = par_type,
-    forest    = forest,
-    num.cores = num.cores,
-    num.trees = num.trees,
-    Y_train   = Y,
+    type            = par_type,
+    forest          = forest,
+    num.cores       = num.cores,
+    num.trees       = num.trees,
+    replace         = replace,
+    sample.fraction = sample.fraction,
+    compute.oob     = compute.oob,
+    Y_train         = Y,
     importance = list(
       gain            = imp_gain,
       gain_normalised = imp_gain_norm,
       count           = imp_count
+    ),
+    oob = list(
+      mse         = forest$oob_mse,
+      predictions = forest$oob_predictions
     )
   )
   class(result) <- c("dirichlet_forest", "list")
@@ -205,6 +334,10 @@ print.dirichlet_forest <- function(x, ...) {
   else
     "unknown"
 
+  oob_str <- if (is.na(x$oob$mse)) "not computed" else round(x$oob$mse, 6)
+  samp_str <- paste0(if (x$replace) "with replacement" else "without replacement",
+                     ", fraction = ", x$sample.fraction)
+
   cat(
     "============================================\n",
     "Dirichlet Forest Model\n",
@@ -212,7 +345,9 @@ print.dirichlet_forest <- function(x, ...) {
     " Type:          ", x$type, "\n",
     " Total Trees:   ", x$num.trees, "\n",
     " Cores Used:    ", x$num.cores, "\n",
+    " Sampling:      ", samp_str, "\n",
     " Training Data: ", train_info, "\n",
+    " OOB MSE:       ", oob_str, "\n",
     "--------------------------------------------\n",
     " Note: Large data structures (fitted values,\n",
     "       residuals) are suppressed.\n",
@@ -226,6 +361,8 @@ print.dirichlet_forest <- function(x, ...) {
     "   $importance$gain\n",
     "   $importance$gain_normalised\n",
     "   $importance$count\n",
+    "   $oob$mse\n",
+    "   $oob$predictions\n",
     " Use importance(forest) for a summary table.\n",
     "============================================\n",
     sep = ""

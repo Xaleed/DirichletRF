@@ -36,8 +36,8 @@ BEGIN_RCPP
 END_RCPP
 }
 // DirichletForest
-List DirichletForest(NumericMatrix X, NumericMatrix Y, int B, int d_max, int n_min, int m_try, int seed, std::string method, bool store_samples, int num_cores);
-RcppExport SEXP _DirichletRF_DirichletForest(SEXP XSEXP, SEXP YSEXP, SEXP BSEXP, SEXP d_maxSEXP, SEXP n_minSEXP, SEXP m_trySEXP, SEXP seedSEXP, SEXP methodSEXP, SEXP store_samplesSEXP, SEXP num_coresSEXP) {
+List DirichletForest(NumericMatrix X, NumericMatrix Y, int B, int d_max, int n_min, int m_try, int seed, std::string method, bool store_samples, int num_cores, bool replace, double sample_fraction, bool compute_oob);
+RcppExport SEXP _DirichletRF_DirichletForest(SEXP XSEXP, SEXP YSEXP, SEXP BSEXP, SEXP d_maxSEXP, SEXP n_minSEXP, SEXP m_trySEXP, SEXP seedSEXP, SEXP methodSEXP, SEXP store_samplesSEXP, SEXP num_coresSEXP, SEXP replaceSEXP, SEXP sample_fractionSEXP, SEXP compute_oobSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -51,7 +51,10 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< std::string >::type method(methodSEXP);
     Rcpp::traits::input_parameter< bool >::type store_samples(store_samplesSEXP);
     Rcpp::traits::input_parameter< int >::type num_cores(num_coresSEXP);
-    rcpp_result_gen = Rcpp::wrap(DirichletForest(X, Y, B, d_max, n_min, m_try, seed, method, store_samples, num_cores));
+    Rcpp::traits::input_parameter< bool >::type replace(replaceSEXP);
+    Rcpp::traits::input_parameter< double >::type sample_fraction(sample_fractionSEXP);
+    Rcpp::traits::input_parameter< bool >::type compute_oob(compute_oobSEXP);
+    rcpp_result_gen = Rcpp::wrap(DirichletForest(X, Y, B, d_max, n_min, m_try, seed, method, store_samples, num_cores, replace, sample_fraction, compute_oob));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -110,7 +113,7 @@ END_RCPP
 static const R_CallMethodDef CallEntries[] = {
     {"_DirichletRF_estimate_dirichlet_mom", (DL_FUNC) &_DirichletRF_estimate_dirichlet_mom, 1},
     {"_DirichletRF_estimate_dirichlet_mle", (DL_FUNC) &_DirichletRF_estimate_dirichlet_mle, 4},
-    {"_DirichletRF_DirichletForest", (DL_FUNC) &_DirichletRF_DirichletForest, 10},
+    {"_DirichletRF_DirichletForest", (DL_FUNC) &_DirichletRF_DirichletForest, 13},
     {"_DirichletRF_GetLeafPredictions", (DL_FUNC) &_DirichletRF_GetLeafPredictions, 2},
     {"_DirichletRF_PredictDirichletForestWeightBased", (DL_FUNC) &_DirichletRF_PredictDirichletForestWeightBased, 3},
     {"_DirichletRF_PredictDirichletForest", (DL_FUNC) &_DirichletRF_PredictDirichletForest, 4},
